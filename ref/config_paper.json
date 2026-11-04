@@ -1,0 +1,656 @@
+{
+ "groups": {
+  "BASE": {
+   "ladder": [
+    4900
+   ],
+   "exit": "15m_outlook_score",
+   "exit_label": "Chốt theo triển vọng chart 15m (không mục tiêu $ cố định, không chốt theo BB 4h): lãi ≥40$ → SL về hòa vốn (lệnh stop chờ sẵn); mỗi nến 15m đóng khi lãi >8$, chấm điểm 8 yếu tố BB15m/RSI/volume/nến/MA80/dư địa; điểm ≤ -3 (≤ -4 nếu lãi <60$) hai nến liên tiếp → đóng toàn bộ",
+   "eps_15m": 40,
+   "be_after_15m": 200,
+   "th_15m": -3,
+   "th_small_15m": -4,
+   "small_15m": 300,
+   "exit_since": "2026-10-09 06:56 (Vien: \"Tất cả các nhánh đều cập nhật lại cách chốt theo khung 15 phút\"); trước đó kiểu B",
+   "stops": [
+    "SL250"
+   ],
+   "rule": {
+    "oi_usd_min": 25000000.0,
+    "vol24h_min": 5000000.0,
+    "atr_pct_max": 8.0
+   },
+   "rule_label": "Coin lớn/thanh khoản cao, biến động thấp–vừa: OI ≥25M$, KL 24h ≥5M$, ATR ngày ≤8% giá",
+   "universe": "dynamic",
+   "coins_legacy": [
+    "ASTER",
+    "AVAX",
+    "DOGE",
+    "LINK",
+    "SOL",
+    "XMR",
+    "LTC",
+    "ICP"
+   ],
+   "rule_derived_from": "8 coin lớn cũ (SOL/DOGE/LINK/AVAX/LTC/XMR/ASTER/ICP): OI 4–626M$ (đa số ≥25M$), ATR ngày 4–7%"
+  }
+ },
+ "stops": {
+  "SL250": 1250
+ },
+ "daily_target_usd": 200,
+ "exit_rule": "Từ 2026-10-09 06:56 (Vien): tất cả nhánh chốt theo triển vọng chart 15m (giống G5_15M từ 2026-10-08 22:03). Kiểu B (50% dải giữa 4h + trail) đã ngừng. Chốt theo triển vọng chart 15m (không mục tiêu $ cố định, không chốt theo BB 4h): lãi ≥40$ → SL về hòa vốn (lệnh stop chờ sẵn); mỗi nến 15m đóng khi lãi >8$, chấm điểm 8 yếu tố BB15m/RSI/volume/nến/MA80/dư địa; điểm ≤ -3 (≤ -4 nếu lãi <60$) hai nến liên tiếp → đóng toàn bộ Từ 2026-10-09 13:28 (Vien): ngưỡng xấu nâng -2 → -3.",
+ "partial_frac": 0.5,
+ "gate2": {
+  "u1_min": 0,
+  "slope_min": 0.0,
+  "note": "Lệnh 2 (tổng ký quỹ tới 60%): BTC thuận lợi + lệnh 1 lãi tạm tính (sau phí vào) >=0$ + MA20 4h của coin mới không giảm trong 10 nến (dốc >=0%)"
+ },
+ "margin_note": "Trần ký quỹ mỗi vị thế = 30% VỐN (vốn tính khối lượng = 5000$ + PnL đã chốt; 1.500$ tại 5000$), kể cả nhồi; tối đa 2 lệnh. Từ 15/10 14:09 (Vien): lệnh đầu = 50% trần (750$ ký quỹ tại 5000$), 50% còn lại chia đều 3 lệnh nhồi (250$ mỗi lệnh) → thang 750/250/250/250 (cộng đúng 1.500$).",
+ "entry_rank": {
+  "bb_min": 0.0,
+  "win_days": 90,
+  "stab": {
+   "r30": 1.8,
+   "r60": 1.8,
+   "chg14": 30.0,
+   "bwr": 2.0
+  },
+  "note": "Vien 22:27/22:29: xếp hạng ứng viên theo điểm tôn trọng BB 4h (90 ngày, chỉ dữ liệu quá khứ); chỉ vào khi điểm ≥0.75 và nến ngày ổn định (30/60 ngày cao/thấp <x1.8, |14 ngày|<30%, độ rộng BB 1D <2x trung vị 180 ngày). Không đổi lệnh đang mở, không chuyển vị thế. Chọn theo IS (research/rank_grid3.py).",
+  "skip_stab_1d": true,
+  "note_skip_stab": "Vien 30/10 12:25: bỏ lọc ổn định BB 1D (BaseAster)"
+ },
+ "btc_recheck": {
+  "m15x4": -1.5,
+  "h1_now": -1.5,
+  "h1_closed": -1.5,
+  "vol_now": 1.0,
+  "vol_closed": 1.5,
+  "note": "Vien 22:42: kiểm tra lại BTC ngay trước MỖI lệnh vào và lệnh nhồi (13 nhánh). Chặn nếu: 4 nến 15m gần nhất (mở nến thứ 4 → giá hiện tại) ≤ -1.5%; hoặc nến 1h đang chạy ≤ -1.5%; hoặc nến 1h vừa đóng ≤ -1.5%; hoặc BTC dưới dải dưới BB 1h (nến đã đóng) + dải đang mở rộng + nến đỏ volume mạnh (nến 1h đang chạy đỏ với volume ≥1.0x TB20, hoặc nến 1h vừa đóng đỏ ≥1.5x). Bị chặn: ghi ENTRY_BLOCKED_BTC / ADD_BLOCKED_BTC (1 lần mỗi đợt); nhồi bị hoãn sẽ khớp theo giá thị trường khi hết chặn."
+ },
+ "stop_exec": {
+  "fast_poll_s": 5,
+  "use_1m_lows": true,
+  "slip_pct": 0.05,
+  "note": "Vien 22:39: cắt lỗ 250/350/500 và mức dời SL (hòa vốn/dải giữa) là lệnh stop chờ sẵn: giá kích hoạt = giá mà lỗ ròng sau phí vào+ra đúng bằng ngưỡng nhánh (tính lại sau mỗi lần nhồi); kiểm tra giá allMids mỗi 5s cho coin đang có vị thế + đáy/đỉnh nến 1m kể từ lần kiểm tra trước; khớp tại giá stop trừ 0.05% trượt giá giả định (chỉ khớp theo giá thị trường nếu giá mở cửa đã vượt qua mức stop)."
+ },
+ "reentry": "Không giới hạn/không chờ khi vào lại coin vừa cắt lỗ/đóng lệnh (Vien 22:42) – chỉ cần đủ điều kiện mô hình.",
+ "exit_rule_history": [
+  "2026-10-08 13:06–2026-10-09 06:56: kiểu B (50% dải giữa BB 4h, phần còn lại trail hòa vốn→dải giữa, chốt dải trên) cho 12 nhánh BASE/G1/G2/G3",
+  "2026-10-08 22:03→: G5_15M chốt theo điểm triển vọng 15m",
+  "2026-10-09 06:56→: tất cả 13 nhánh chốt theo điểm triển vọng 15m",
+  "2026-10-09 13:28→: ngưỡng điểm 15m chốt lệnh -2 → -3 (hai nến liên tiếp); giữ ≤-4 khi lãi <60$, BE 40$, trail 15m khóa lãi (Vien)",
+  "2026-10-09 17:52→: thêm chiều SHORT đối xứng (thoát theo điểm 15m đảo chiều ≤-3 / ≤-4 khi lãi <60$, BE 40$, trail 15m đối xứng); 17:54: mọi lệnh vào/nhồi hai chiều phải qua toàn bộ bộ rule (Vien)",
+  {
+   "time": "2026-10-09 21:05",
+   "by": "Vien",
+   "change": "C2 for all branches: 15m score exit only after touching the 4h mid band since entry; G6 TP at opposite 1h band"
+  }
+ ],
+ "retired_branches": {
+  "BASE_SL500": {
+   "at": "2026-10-09 06:57",
+   "reason": "Vien 06:57: bỏ các nhánh SL500; đóng vị thế theo giá thị trường (paper), giữ lịch sử để so sánh"
+  },
+  "G1_SL500": {
+   "at": "2026-10-09 06:57",
+   "reason": "Vien 06:57: bỏ các nhánh SL500; đóng vị thế theo giá thị trường (paper), giữ lịch sử để so sánh"
+  },
+  "G2_SL500": {
+   "at": "2026-10-09 06:57",
+   "reason": "Vien 06:57: bỏ các nhánh SL500; đóng vị thế theo giá thị trường (paper), giữ lịch sử để so sánh"
+  },
+  "G3_SL500": {
+   "at": "2026-10-09 06:57",
+   "reason": "Vien 06:57: bỏ các nhánh SL500; đóng vị thế theo giá thị trường (paper), giữ lịch sử để so sánh"
+  },
+  "G6_TREND1H_SL100": {
+   "at": "2026-10-09 21:05",
+   "reason": "Vien 21:05: thay G6 SL100 bằng hai nhánh SL60/SL70 không nhồi, chốt tại dải đối diện 1h; nhánh SL100 chưa có lệnh nào, lưu trữ hồ sơ"
+  },
+  "G1_SL250": {
+   "at": "2026-10-15 13:55",
+   "reason": "Vien 2026-10-15 ~13:50: xoá G1-G7 và BASE_SL350, chỉ giữ BASE_SL250 (x5) + nhánh mới BASE_SL250_X10 (đòn bẩy x10)",
+   "deleted_from_books": true,
+   "archive": "state/archive_pre_cleanup_2026-10-15.json + .books.pkl"
+  },
+  "G1_SL350": {
+   "at": "2026-10-15 13:55",
+   "reason": "Vien 2026-10-15 ~13:50: xoá G1-G7 và BASE_SL350, chỉ giữ BASE_SL250 (x5) + nhánh mới BASE_SL250_X10 (đòn bẩy x10)",
+   "deleted_from_books": true,
+   "archive": "state/archive_pre_cleanup_2026-10-15.json + .books.pkl"
+  },
+  "G2_SL250": {
+   "at": "2026-10-15 13:55",
+   "reason": "Vien 2026-10-15 ~13:50: xoá G1-G7 và BASE_SL350, chỉ giữ BASE_SL250 (x5) + nhánh mới BASE_SL250_X10 (đòn bẩy x10)",
+   "deleted_from_books": true,
+   "archive": "state/archive_pre_cleanup_2026-10-15.json + .books.pkl"
+  },
+  "G2_SL350": {
+   "at": "2026-10-15 13:55",
+   "reason": "Vien 2026-10-15 ~13:50: xoá G1-G7 và BASE_SL350, chỉ giữ BASE_SL250 (x5) + nhánh mới BASE_SL250_X10 (đòn bẩy x10)",
+   "deleted_from_books": true,
+   "archive": "state/archive_pre_cleanup_2026-10-15.json + .books.pkl"
+  },
+  "G3_SL250": {
+   "at": "2026-10-15 13:55",
+   "reason": "Vien 2026-10-15 ~13:50: xoá G1-G7 và BASE_SL350, chỉ giữ BASE_SL250 (x5) + nhánh mới BASE_SL250_X10 (đòn bẩy x10)",
+   "deleted_from_books": true,
+   "archive": "state/archive_pre_cleanup_2026-10-15.json + .books.pkl"
+  },
+  "G3_SL350": {
+   "at": "2026-10-15 13:55",
+   "reason": "Vien 2026-10-15 ~13:50: xoá G1-G7 và BASE_SL350, chỉ giữ BASE_SL250 (x5) + nhánh mới BASE_SL250_X10 (đòn bẩy x10)",
+   "deleted_from_books": true,
+   "archive": "state/archive_pre_cleanup_2026-10-15.json + .books.pkl"
+  },
+  "G5_15M_SL250": {
+   "at": "2026-10-15 13:55",
+   "reason": "Vien 2026-10-15 ~13:50: xoá G1-G7 và BASE_SL350, chỉ giữ BASE_SL250 (x5) + nhánh mới BASE_SL250_X10 (đòn bẩy x10)",
+   "deleted_from_books": true,
+   "archive": "state/archive_pre_cleanup_2026-10-15.json + .books.pkl"
+  },
+  "G6_TREND1H_SL60": {
+   "at": "2026-10-15 13:55",
+   "reason": "Vien 2026-10-15 ~13:50: xoá G1-G7 và BASE_SL350, chỉ giữ BASE_SL250 (x5) + nhánh mới BASE_SL250_X10 (đòn bẩy x10)",
+   "deleted_from_books": true,
+   "archive": "state/archive_pre_cleanup_2026-10-15.json + .books.pkl"
+  },
+  "G6_TREND1H_SL70": {
+   "at": "2026-10-15 13:55",
+   "reason": "Vien 2026-10-15 ~13:50: xoá G1-G7 và BASE_SL350, chỉ giữ BASE_SL250 (x5) + nhánh mới BASE_SL250_X10 (đòn bẩy x10)",
+   "deleted_from_books": true,
+   "archive": "state/archive_pre_cleanup_2026-10-15.json + .books.pkl"
+  },
+  "G7_MTF_SL500": {
+   "at": "2026-10-15 13:55",
+   "reason": "Vien 2026-10-15 ~13:50: xoá G1-G7 và BASE_SL350, chỉ giữ BASE_SL250 (x5) + nhánh mới BASE_SL250_X10 (đòn bẩy x10)",
+   "deleted_from_books": true,
+   "archive": "state/archive_pre_cleanup_2026-10-15.json + .books.pkl"
+  },
+  "BASE_SL350": {
+   "at": "2026-10-15 13:55",
+   "reason": "Vien 2026-10-15 ~13:50: xoá G1-G7 và BASE_SL350, chỉ giữ BASE_SL250 (x5) + nhánh mới BASE_SL250_X10 (đòn bẩy x10)",
+   "deleted_from_books": true,
+   "archive": "state/archive_pre_cleanup_2026-10-15.json + .books.pkl"
+  },
+  "BASE_SL250_X10": {
+   "at": "2026-10-30 09:52",
+   "reason": "Vien 30/10 09:51: bỏ nhánh X10, không duy trì nữa; chỉ chạy BASE_SL250 x5; giữ lịch sử"
+  }
+ },
+ "renamed_branches": {
+  "G5_15M_SL500": {
+   "to": "G5_15M_SL250",
+   "at": "2026-10-09 06:58",
+   "reason": "Vien 06:58: G5 đổi cắt lỗ 500→250$, giữ tài khoản/lịch sử/vị thế XMR"
+  }
+ },
+ "alerts": {
+  "warn": -250,
+  "crit": -400,
+  "cat": -500,
+  "note": "Giữ nguyên: WARN -250$ (tạm dừng nhồi, chờ Vien) chỉ còn tác dụng với nhánh SL350 (nhánh SL250 cắt lỗ trước khi tới -250$); CRIT -400 / CAT -500 không còn với tới được (trừ trượt giá) vì cắt lỗ tối đa 350$. Không đổi WARN sang -200 vì sẽ làm thay đổi việc nhồi lệnh của nhánh SL250."
+ },
+ "trail_15m": {
+  "tiers": [
+   [
+    400,
+    0.3
+   ],
+   [
+    750,
+    0.5
+   ]
+  ],
+  "mid_buf": null,
+  "log_min": 0.001,
+  "since": "2026-10-09 08:29 (Vien)",
+  "note": "Khóa lãi theo đỉnh (áp dụng cả vị thế đang mở): khi lãi đỉnh (sau phí vào) ≥80$ → mỗi nến 15m đóng nâng lệnh stop chờ sẵn lên mức giữ 30% lãi đỉnh; lãi đỉnh ≥150$ → giữ 50%. Chỉ nâng, không hạ; chỉ đặt dưới giá đóng nến 15m. Khớp tại mức stop −0.05% trượt giá. Đề xuất ban đầu 'dải giữa BB 15m' (mid_buf) đã kiểm tra nhưng làm giảm lãi mạnh ở nửa kiểm định (xem data/trail15_grid*.csv) nên để tắt (mid_buf=null); bật lại bằng mid_buf=0.002. Vẫn giữ: chốt theo điểm triển vọng 15m, SL hòa vốn từ +40$; cái nào chạm trước thì đóng."
+ },
+ "equity_epoch": {
+  "time": "2026-10-09 08:34:05",
+  "set_at": "2026-10-09 10:15 (Vien)",
+  "rule": "Mốc đo lường mới cho 9 nhánh đang chạy = lúc bot khởi động lại với trail 15m khóa lãi (thay đổi rule chốt cuối cùng). Equity = 5000 + PnL đã chốt của các lệnh ĐÓNG SAU mốc + tạm tính của vị thế đang mở. Vị thế mở từ trước mốc vẫn giữ nguyên, tạm tính tính từ giá vào lệnh. Đỉnh/drawdown, số lệnh/thắng/thua, số lần cắt lỗ, mục tiêu ngày: chỉ tính sau mốc. Số liệu trước mốc được lưu trong books.pkl (epochs) và state.json (pre_epoch); lịch sử events/trades.csv giữ nguyên. Các nhánh SL500 đã ngừng không bị ảnh hưởng."
+ },
+ "dynamic_universe": {
+  "enabled": true,
+  "since": "2026-10-09 11:05 (Vien)",
+  "prefilter": {
+   "vol_min": 3000000.0,
+   "oi_min": 5000000.0,
+   "lev_min": 5,
+   "min_4h_bars": 300,
+   "min_daily": 90,
+   "max_size": 15,
+   "pace_s": 2.5,
+   "periodic_h": 4,
+   "max_age_h": 24,
+   "after_close_s": 120,
+   "periodic_min": 15,
+   "offset_s": 90,
+   "pace_inc_s": 1.2,
+   "inc_days_4h": 3,
+   "inc_days_1d": 5
+  },
+  "note": "Shortlist động toàn thị trường cho cả 9 nhánh: mỗi nhóm cố định RULE chọn coin, không cố định danh sách. Quét tất cả perp Hyperliquid (metaAndAssetCtxs): bỏ delisted → đòn bẩy tối đa ≥5x → KL 24h ≥3M$ → OI ≥5M$ → đủ lịch sử (≥300 nến 4h, ≥90 nến ngày) → điểm tôn trọng BB ≥0.75 → ổn định 1D → rule nhóm (groups.*.rule) → xếp theo điểm, tối đa 15 coin/nhóm. Ngưỡng thanh khoản 3M$/5M$ (thay vì ~20M$) vì danh sách cũ có coin KL 3–6M$ (VIRTUAL, FIL, ICP, ASTER). Làm mới: ngay sau mỗi lệnh đóng (EXIT/EXIT_15M/trail/STOP), mỗi nến 4h mới (~2 phút sau khi đóng), tối thiểu 1 lần/ngày; điểm BB cache theo nến 4h đóng cuối, ổn định 1D cache theo ngày; nhịp 2.5s/request (~600 weight/phút). Vị thế đang mở vẫn được quản lý dù coin rời shortlist. Event SHORTLIST_UPDATE (mỗi nhóm), file data/shortlist_latest.csv, state/shortlist.json.",
+  "list_max_age_h": 1,
+  "guard": "Vien 09/10 18:41: entries AND adds (both sides) only from the CURRENT dynamic shortlist of that side (BB score of that band >=0.75, 1D stability, group rule); adds on a coin that left the list are blocked (position still managed/exited); no legacy/hard-coded list ever used (groups.*.coins_legacy = documentation only); list older than list_max_age_h (1h since 10/10 02:00, was 8h) -> no new entries/adds until a successful rescan; missing 1D stability data = fail.",
+  "scan_schedule": "Vien 10/10 02:00: full whole-market rescan every 15 min (~90 s after each 15m close) + after every close + startup; background thread, never overlapping (due slot skipped if previous scan still running); cached closed 4h/1D bars reused, only the last 3 (4h) / 5 (1D) days refetched and merged into the identical window; SHORTLIST_UPDATE only when list content changes; heartbeat in state.json scanner; entries/adds blocked if list older than list_max_age_h (1h)."
+ },
+ "short_side": {
+  "enabled": true,
+  "since": "2026-10-09 17:52/17:54 (Vien)",
+  "entry": "SHORT khi giá ≥ dải trên BB 4h của nến 4h đóng gần nhất (khớp max(giá, dải trên)); chạm dải chỉ là tín hiệu",
+  "full_rule_set": "Mọi lệnh vào VÀ lệnh nhồi, cả LONG lẫn SHORT, phải qua toàn bộ bộ rule: (1) BTC 1D/1W theo chiều (long: chặn khi 1D đóng dưới dải dưới & 1W nửa dưới; short: chặn khi 1D đóng trên dải trên & 1W nửa trên); (2) BTC ngắn hạn theo chiều (long chặn khi BTC giảm mạnh: 4x15m ≤-1.5%, 1h ≤-1.5%, dưới dải dưới 1h + dải mở rộng + nến đỏ volume; short chặn khi BTC tăng mạnh: ≥+1.5%, trên dải trên 1h + dải mở rộng + nến xanh volume); (3) điểm tôn trọng dải bị chạm (dưới cho long, trên cho short) ≥0.75; (4) ổn định 1D; (5) độ dốc MA20 4h theo chiều (long: không giảm quá 3%/10 nến; short: không tăng quá 3%/10 nến); (6) ký quỹ ≤30%/vị thế; (7) không mở ngược chiều trên cùng coin, tối đa 2 vị thế tổng; (8) lệnh 2: BTC thuận lợi theo chiều (long: 1D %B≤0.5 & 1W %B≥0.4; short: 1D %B≥0.5 & 1W %B≤0.6) + lệnh 1 ≥0$ + MA20 4h không đi ngược (long không giảm, short không tăng). Fear&Greed được ghi vào lý do vào lệnh (chưa có ngưỡng chặn). Bị chặn → ENTRY_BLOCKED_BTC/ENTRY_BLOCKED_RULES/ADD_BLOCKED_BTC/ADD_BLOCKED_RULES kèm side + fails.",
+  "adds": "Nhồi đối xứng: giá đi ngược thêm +1.5%/+3%/+4.5% so với lệnh đầu (tối đa 3 lần), cùng thang nhồi của nhánh; lệnh nhồi bị hoãn khi không qua bộ rule và khớp theo giá thị trường khi qua lại nếu giá vẫn vượt mức",
+  "stops": "SL chờ sẵn PHÍA TRÊN giá: mức mà lỗ sau phí = 250/350$ (cost - px·q·(1+phí) - phí vào = -SL), khớp tại mức +0.05% trượt giá (mua)",
+  "exits": "Hòa vốn khi lãi ≥40$ (avg×0.998); điểm triển vọng 15m đối xứng (score15_short: %B ≤0.2 tốt, dải giữa giảm, RSI ≤45 giảm, nến đỏ thân dài, dưới MA80, dư địa tới dải dưới) ≤-3 hai nến 15m (≤-4 khi lãi <60$) → đóng 100%; trail_15m khóa 30%/50% lãi đỉnh, hạ dần mức stop phía trên",
+  "shortlist": "Cùng rule nhóm; điểm tôn trọng dải TRÊN (bbrank.now_short = cùng công thức trên chart lật giá) ≥0.75 + ổn định 1D; danh sách riêng lists_short",
+  "records": "events/trades có side LONG/SHORT; trades.csv giữ nguyên cột cũ (append-only) và thêm tiền tố [LONG]/[SHORT] trong reason; data/trades_side.csv có cột side"
+ },
+ "strategy_history": [
+  "2026-10-09 17:52/17:54 (Vien): thêm SHORT đối xứng cho 9 nhánh; chạm dải chỉ là tín hiệu, toàn bộ bộ rule kiểm tra cho mọi lệnh vào và nhồi cả hai chiều",
+  {
+   "time": "2026-10-09 18:41",
+   "by": "Vien",
+   "change": "shortlist guard: entries+adds only from current side shortlist; no legacy fallback; stale list (>8h) blocks entries/adds; missing 1D data fails"
+  },
+  {
+   "time": "2026-10-09 20:08",
+   "by": "Vien",
+   "change": "new branch G6_TREND1H_SL100: 4h trend filter + 1h BB trigger, SL100, own 5000$ account"
+  },
+  {
+   "time": "2026-10-09 21:05",
+   "by": "Vien",
+   "change": "G6_TREND1H_SL100 retired (0 trades) -> G6_TREND1H_SL60 + G6_TREND1H_SL70, single 250 entry, TP opposite 1h band; C2 exit gate all branches"
+  },
+  {
+   "time": "2026-10-10 00:12",
+   "by": "Vien",
+   "change": "compounding sizing: legs x (5000+realized since epoch)/5000; margin cap 30% of that base; SL $ unchanged"
+  },
+  {
+   "time": "2026-10-10 02:00",
+   "by": "Vien",
+   "change": "shortlist rescan every 15 min (+after close, startup), incremental candle cache, SHORTLIST_UPDATE only on change, stale guard 8h -> 1h; selection rules unchanged"
+  },
+  {
+   "time": "2026-10-10 16:19",
+   "by": "Vien",
+   "change": "new official branch G7_MTF_SL500: coin-only 4h/1h/15m multi-timeframe entry (4h trend UP/SIDEWAYS|DOWN/SIDEWAYS + %B4h half + 1h band touch + 15m confirmation), NO BTC conditions, shortlist union BASE∪G1∪G3, ladder 250/300/400/550 compounding, SL500, exits as all branches + TP opposite 1h band, own 5000$ account"
+  },
+  {
+   "time": "2026-10-10 17:12",
+   "by": "Vien",
+   "change": "SHORT gate for all 12 branches: Path A range-bound coin (upper score>=0.78, sustained breakout<=10%, overshoot>=6%<=25%, 1D r30<=1.5, no short while last 4h closed above upper band) or Path B confirmed 4h close below lower band (continuation short); all old short rules kept"
+  },
+  {
+   "time": "2026-10-15 13:55",
+   "by": "Vien",
+   "change": "Vien 2026-10-15 ~13:50: xoá G1-G7 và BASE_SL350, chỉ giữ BASE_SL250 (x5) + nhánh mới BASE_SL250_X10 (đòn bẩy x10). Branch list now: BASE_SL250 (lev x5, unchanged, positions preserved) and BASE_SL250_X10 (lev x10, new separate 5000$ account, flat). Leverage is per-branch (Book.lev / strat.Book.LV(); global CFG lev stays 5). Margin cap uses margin (per-position p[margin], legacy positions = cost/5). Coin max-leverage filter: scanner lev_min stays 5 (BASE_SL250 unchanged); X10 additionally only trades/adds coins with exchange max leverage >= 10 (MAXLEV map from scan rows)."
+  },
+  {
+   "time": "2026-10-15 14:09",
+   "by": "Vien",
+   "change": "BASE ladder 250/300/400/550 -> 750/250/250/250 margin (first leg = 50% of the 30% cap, 3 equal adds share the other 50%); both BASE_SL250 (x5) and BASE_SL250_X10 (x10). Open positions keep stored size/margin/k; later adds use the new leg by index k, clamped by the 30% cap check."
+  },
+  {
+   "time": "2026-10-30 09:55",
+   "by": "Vien",
+   "change": "Base: BB-respect score threshold entry_rank.bb_min 0.75->0.85 (LONG+SHORT shortlist/entries/adds), short_gate Path A a_score 0.78->0.85"
+  },
+  {
+   "time": "2026-10-30 09:57",
+   "by": "Vien",
+   "change": "Base: ladder 750/250/250/250 (30% cap, 3 adds) -> [1000] single entry 20% equity, no adds"
+  },
+  {
+   "time": "2026-10-30 10:00",
+   "by": "Vien",
+   "change": "Base: BTC_VOL two-sided volatility gate enabled (research/btcvol)"
+  },
+  {
+   "time": "2026-10-30 10:10",
+   "by": "Vien",
+   "change": "Base zone 1: dump/pump blocks both sides; stability cooldown 2h since last trigger (stateful); dump force-closes counter-trend LONGs (pump: SHORTs)"
+  },
+  {
+   "time": "2026-10-30 10:45",
+   "change": "Vien [pt497u]: Base điểm tôn trọng BB 0.85→0.80 (entry_rank.bb_min + short_gate.a_score); cắt lỗ 250→350$ ròng (khóa tên nhánh BASE_SL250 giữ nguyên để giữ tài khoản/lịch sử, stops.SL250=350). Giữ nguyên các rule khác."
+  },
+  {
+   "time": "2026-10-30 11:02",
+   "change": "Vien [pt501u]: Base cắt lỗ 350→100$ ròng (stops.SL250=100, giữ tên nhánh); bỏ rule đóng lệnh ngược xu hướng khi BTC bơm/sập (btc_vol.dump_exit=false). Giữ chặn vào lệnh mới BTC_VOL + 2h ổn định, BB0.80, 20% không nhồi."
+  },
+  {
+   "time": "2026-10-30 11:06",
+   "change": "Vien [pt503u]: Base cắt lỗ 100→1000$ ròng (stops.SL250=1000, giữ tên nhánh). Giữ dump_exit=false, BB0.80, 20% không nhồi, BTC_VOL chặn vào mới + 2h."
+  },
+  {
+   "time": "2026-10-30 11:32",
+   "change": "Vien [pt513u]: Base chỉ giao dịch ASTER (force_universe=['ASTER']); bỏ điểm tôn trọng BB (entry_rank.bb_min=0, short_gate.a_score=0); cắt lỗ 1000→250$. Giữ BTC_VOL chặn vào mới + 2h, không đóng ngược xu hướng, 20% không nhồi, LOCK/BE/trail/C2."
+  }
+ ],
+ "exit_hold_mid4h": {
+  "enabled": true,
+  "since": "2026-10-09 21:05 (Vien: \"Áp dụng nâng cấp nguyên tắc chốt lãi cho mọi nhánh\")",
+  "rule": "C2: điểm triển vọng 15m (≤-3 hai nến, ≤-4 khi lãi <60$) chỉ được đóng lệnh sau khi giá đã chạm dải giữa BB 4h (nến 4h đóng gần nhất) kể từ lúc vào lệnh (long: giá ≥ dải giữa; short: giá ≤ dải giữa). Cắt lỗ, hòa vốn +40$, trail 15m không đổi. G6 thêm chốt tại dải đối diện 1h.",
+  "research": "research/lab.py, lab_run.py, lab_report.py → data/tp_candidates*.csv: C2 tổng +2981$ vs hiện tại -723$ (9 nhánh, 19/08–09/10); tốt hơn cả 2 nửa ở G1/G2/G5/G6, hơi kém ở BASE/G3."
+ },
+ "sizing": {
+  "compound": true,
+  "since": "2026-10-10 00:12 (Vien: \"Vốn tính lãi/lỗ nhập gốc làm cơ sở tính volume lệnh\")",
+  "rule": "base = 5000 + realized PnL since the epoch (closed trades only, no unrealized), per branch; each ladder leg margin x base/5000 (ladder in config = values at base 5000); 30% margin cap = 30% of base; SL $ thresholds unchanged; open positions keep their size, later adds use scaled legs. | 2026-10-15 (Vien t188u): thang BASE đổi thành 750/250/250/250 (lệnh đầu = 50% của trần 30%, 3 lệnh nhồi chia đều 50% còn lại; tổng = 1500 = trần tại vốn 5000); áp dụng cho BASE_SL250 (x5) và BASE_SL250_X10 (x10). Vị thế đang mở giữ nguyên khối lượng/legs đã lưu; lệnh nhồi tiếp theo lấy bậc theo chỉ số k của thang mới, vẫn bị chặn bởi trần 30% (cur+leg(k) ≤ 0.30×vốn)."
+ },
+ "short_gate": {
+  "enabled": true,
+  "since": "2026-10-10 17:12 (Vien)",
+  "a_score": 0.0,
+  "a_bo": 99.0,
+  "a_deep": 0.25,
+  "a_r30": 1.5,
+  "gate_adds": false,
+  "quote": "Bổ sung thêm rule short. Chỉ short khi (1) Token là loại có quá khứ thể hiện đi trong dải bol ổn định, hoặc (2) Short khi confirm break down bol 4h (đóng nến dưới đường bol downline). Ko short khi break cạnh trên. Nếu có dấu hiệu quay đầu thì short.",
+  "rule": "Cổng bổ sung cho MỌI lệnh vào SHORT ở tất cả 12 nhánh (mọi rule short cũ giữ nguyên: BTC theo chiều (trừ G7), shortlist, điểm dải, ổn định 1D, MA20, xu hướng 4h G6/G7, 15m G7, cổng lệnh 2, ký quỹ). Path A – coin đi trong dải ổn định (khi giá chạm dải trên – BB 4h với nhánh 4h, BB 1h với G6/G7): điểm tôn trọng dải trên ≥0.78 (thay vì 0.75), tỉ lệ phá dải trên thật ≤10% (lần chạm dải trên có nến đóng trên dải mà 2 nến sau không đóng lại trong dải / số lần chạm, 90 ngày nến 4h đã đóng), tỉ lệ vượt dải trên ≥6% ≤25%, biên độ 30 ngày nến ngày cao/thấp ≤x1.5; và KHÔNG short khi nến 4h đóng gần nhất đóng TRÊN dải trên (đang phá cạnh trên) – chỉ short khi đã có nến 4h đóng lại trong dải (dấu hiệu quay đầu). Path B – phá vỡ xuống 4h đã xác nhận: nến 4h đóng gần nhất đóng DƯỚI dải dưới → short tiếp diễn; nhánh 4h vào theo giá thị trường (phí taker) khi giá vẫn ≤ dải dưới đó; G6/G7 vào khi giá chạm dải trên BB 1h (hồi lại); coin phải thuộc shortlist động LONG hoặc SHORT của nhóm (rule nhóm + ổn định 1D), không cần điểm dải trên; G7 bỏ điều kiện %B4h≥0.5 cho Path B. Nhồi lệnh, cắt lỗ, thang, thoát lệnh không đổi (gate_adds=false: biến thể chặn cả nhồi short không tốt hơn trong replay).",
+  "thresholds_note": "Ngưỡng chọn theo phân phối PIT của các coin shortlist SHORT trong 30 ngày (điểm dải trên trung vị 0.78; tỉ lệ phá thật trung vị 0.105; vượt ≥6% trung vị 0.20), không tối ưu theo kết quả lệnh. Lưu ý: đã biết danh sách lệnh lỗ của G7 trước khi chọn.",
+  "research": "research/replay30_sg.py → data/replay30_shortgate_summary.csv, data/replay30_shortgate_trades.csv",
+  "note_a_bo": "Vien 30/10 12:30: bỏ lọc tỉ lệ phá dải trên (BaseAster) – 99 = tắt"
+ },
+ "groups_retired_2026_10_15": {
+  "G1": {
+   "ladder": [
+    250,
+    300,
+    400,
+    550
+   ],
+   "exit": "15m_outlook_score",
+   "exit_label": "Chốt theo triển vọng chart 15m (không mục tiêu $ cố định, không chốt theo BB 4h): lãi ≥40$ → SL về hòa vốn (lệnh stop chờ sẵn); mỗi nến 15m đóng khi lãi >8$, chấm điểm 8 yếu tố BB15m/RSI/volume/nến/MA80/dư địa; điểm ≤ -3 (≤ -4 nếu lãi <60$) hai nến liên tiếp → đóng toàn bộ",
+   "eps_15m": 8,
+   "be_after_15m": 40,
+   "th_15m": -3,
+   "th_small_15m": -4,
+   "small_15m": 60,
+   "exit_since": "2026-10-09 06:56 (Vien: \"Tất cả các nhánh đều cập nhật lại cách chốt theo khung 15 phút\"); trước đó kiểu B",
+   "stops": [
+    "SL250",
+    "SL350"
+   ],
+   "rule": {
+    "atr_pct_min": 7.0,
+    "oi_usd_max": 200000000.0
+   },
+   "rule_label": "Altcoin vốn hóa vừa, biến động cao: ATR ngày ≥7% giá, OI ≤200M$ (không lấy nhóm siêu lớn), đủ thanh khoản (KL 24h ≥3M$, OI ≥5M$, đòn bẩy tối đa ≥5x)",
+   "universe": "dynamic",
+   "coins_legacy": [
+    "ENA",
+    "XPL",
+    "MON",
+    "FIL",
+    "kNEIRO",
+    "AERO",
+    "VIRTUAL",
+    "XMR",
+    "AVAX"
+   ],
+   "rule_derived_from": "9 coin cũ (ENA/XPL/MON/FIL/kNEIRO/AERO/VIRTUAL/XMR/AVAX): đa số ATR ngày 9–14%, OI 7–121M$"
+  },
+  "G2": {
+   "ladder": [
+    500,
+    350,
+    325,
+    325
+   ],
+   "exit": "15m_outlook_score",
+   "exit_label": "Chốt theo triển vọng chart 15m (không mục tiêu $ cố định, không chốt theo BB 4h): lãi ≥40$ → SL về hòa vốn (lệnh stop chờ sẵn); mỗi nến 15m đóng khi lãi >8$, chấm điểm 8 yếu tố BB15m/RSI/volume/nến/MA80/dư địa; điểm ≤ -3 (≤ -4 nếu lãi <60$) hai nến liên tiếp → đóng toàn bộ",
+   "eps_15m": 8,
+   "be_after_15m": 40,
+   "th_15m": -3,
+   "th_small_15m": -4,
+   "small_15m": 60,
+   "exit_since": "2026-10-09 06:56 (Vien: \"Tất cả các nhánh đều cập nhật lại cách chốt theo khung 15 phút\"); trước đó kiểu B",
+   "stops": [
+    "SL250",
+    "SL350"
+   ],
+   "rule": {
+    "atr_pct_min": 7.0,
+    "oi_usd_max": 200000000.0
+   },
+   "rule_label": "Altcoin vốn hóa vừa, biến động cao: ATR ngày ≥7% giá, OI ≤200M$ (không lấy nhóm siêu lớn), đủ thanh khoản (KL 24h ≥3M$, OI ≥5M$, đòn bẩy tối đa ≥5x)",
+   "universe": "dynamic",
+   "coins_legacy": [
+    "ENA",
+    "XPL",
+    "MON",
+    "FIL",
+    "kNEIRO",
+    "AERO",
+    "VIRTUAL",
+    "XMR",
+    "AVAX"
+   ],
+   "rule_derived_from": "9 coin cũ (ENA/XPL/MON/FIL/kNEIRO/AERO/VIRTUAL/XMR/AVAX): đa số ATR ngày 9–14%, OI 7–121M$"
+  },
+  "G3": {
+   "ladder": [
+    250,
+    300,
+    400,
+    550
+   ],
+   "exit": "15m_outlook_score",
+   "exit_label": "Chốt theo triển vọng chart 15m (không mục tiêu $ cố định, không chốt theo BB 4h): lãi ≥40$ → SL về hòa vốn (lệnh stop chờ sẵn); mỗi nến 15m đóng khi lãi >8$, chấm điểm 8 yếu tố BB15m/RSI/volume/nến/MA80/dư địa; điểm ≤ -3 (≤ -4 nếu lãi <60$) hai nến liên tiếp → đóng toàn bộ",
+   "eps_15m": 8,
+   "be_after_15m": 40,
+   "th_15m": -3,
+   "th_small_15m": -4,
+   "small_15m": 60,
+   "exit_since": "2026-10-09 06:56 (Vien: \"Tất cả các nhánh đều cập nhật lại cách chốt theo khung 15 phút\"); trước đó kiểu B",
+   "stops": [
+    "SL250",
+    "SL350"
+   ],
+   "rule": {
+    "oi_usd_min": 20000000.0,
+    "raw_rev_min": 0.7,
+    "raw_fake_min": 0.5,
+    "swings30_min": 4.0,
+    "r30_max": 1.4,
+    "atr_pct_max": 6.0
+   },
+   "rule_label": "Coin đi ngang/hồi về dải giữa tốt: OI ≥20M$, ≥70% lần chạm dải dưới về dải giữa 4h trong 2 ngày, phá giả ≥50%, ≥4 nhịp dải dưới→dải trên/30 ngày, biên độ 30 ngày cao/thấp ≤x1.40, ATR ngày ≤6%",
+   "universe": "dynamic",
+   "coins_legacy": [
+    "ASTER",
+    "SOL",
+    "DOGE"
+   ],
+   "rule_derived_from": "ASTER/SOL/DOGE: về dải giữa 71–76%, phá giả 55–100%, 4.3–4.7 nhịp/30 ngày, biên độ 30 ngày x1.24–1.35, ATR 4.4–5.7%"
+  },
+  "G5_15M": {
+   "ladder": [
+    500,
+    350,
+    325,
+    325
+   ],
+   "stops": [
+    "SL250"
+   ],
+   "exit": "15m_outlook_score",
+   "exit_label": "Chốt theo triển vọng chart 15m (không mục tiêu $ cố định, không chốt theo BB 4h): lãi ≥40$ → SL về hòa vốn (lệnh stop chờ sẵn); mỗi nến 15m đóng khi lãi >8$, chấm điểm 8 yếu tố BB15m/RSI/volume/nến/MA80/dư địa; điểm ≤ -3 (≤ -4 nếu lãi <60$) hai nến liên tiếp → đóng toàn bộ",
+   "note": "Tài khoản paper riêng 5000$ (giữ lịch sử từ G5_15M_SL500); từ 09/10 06:58 cắt lỗ 250$ (đổi tên G5_15M_SL250). Không gộp sự kiện với nhánh khác.",
+   "eps_15m": 8,
+   "be_after_15m": 40,
+   "th_15m": -3,
+   "th_small_15m": -4,
+   "small_15m": 60,
+   "separate": true,
+   "rule": {
+    "atr_pct_min": 7.0,
+    "oi_usd_max": 200000000.0
+   },
+   "rule_label": "Altcoin vốn hóa vừa, biến động cao: ATR ngày ≥7% giá, OI ≤200M$ (không lấy nhóm siêu lớn), đủ thanh khoản (KL 24h ≥3M$, OI ≥5M$, đòn bẩy tối đa ≥5x)",
+   "universe": "dynamic",
+   "coins_legacy": [
+    "ENA",
+    "XPL",
+    "MON",
+    "FIL",
+    "kNEIRO",
+    "AERO",
+    "VIRTUAL",
+    "XMR",
+    "AVAX"
+   ],
+   "rule_derived_from": "9 coin cũ (ENA/XPL/MON/FIL/kNEIRO/AERO/VIRTUAL/XMR/AVAX): đa số ATR ngày 9–14%, OI 7–121M$"
+  },
+  "G6_TREND1H": {
+   "ladder": [
+    250
+   ],
+   "exit": "15m_outlook_score",
+   "exit_label": "Chốt theo triển vọng chart 15m (không mục tiêu $ cố định, không chốt theo BB 4h): lãi ≥40$ → SL về hòa vốn (lệnh stop chờ sẵn); mỗi nến 15m đóng khi lãi >8$, chấm điểm 8 yếu tố BB15m/RSI/volume/nến/MA80/dư địa; điểm ≤ -3 (≤ -4 nếu lãi <60$) hai nến liên tiếp → đóng toàn bộ",
+   "eps_15m": 8,
+   "be_after_15m": 40,
+   "th_15m": -3,
+   "th_small_15m": -4,
+   "small_15m": 60,
+   "exit_since": "2026-10-09 06:56 (Vien: \"Tất cả các nhánh đều cập nhật lại cách chốt theo khung 15 phút\"); trước đó kiểu B",
+   "stops": [
+    "SL60",
+    "SL70"
+   ],
+   "universe": "dynamic",
+   "separate": true,
+   "entry_tf": "1h",
+   "universe_union": [
+    "BASE",
+    "G1"
+   ],
+   "alerts": [],
+   "trend_allow": {
+    "L": [
+     "UP",
+     "SIDEWAYS"
+    ],
+    "S": [
+     "DOWN"
+    ]
+   },
+   "rule_label": "shortlist động BASE ∪ G1 theo từng chiều (điểm tôn trọng dải ≥0.75, ổn định 1D, rule nhóm BASE hoặc G1)",
+   "trend_label": "4 phiếu trên nến 4h đóng: dốc MA20 10 nến ≥+1%/≤-1%, giá trên/dưới MA20, MA20 trên/dưới MA50, 2 đỉnh+2 đáy swing gần nhất HH/HL hoặc LH/LL; ≥3 phiếu + dốc cùng dấu = UP/DOWN, còn lại SIDEWAYS",
+   "since": "2026-10-09 21:05 (Vien): SL60/SL70, không nhồi, chốt tại dải đối diện 1h; trước đó 20:08 SL100 thang 250/300/400/550",
+   "note": "G6_TREND1H (Vien 21:05): hai nhánh SL60 và SL70, mỗi nhánh tài khoản riêng 5000$, mốc đo = lúc triển khai; 1 lệnh 250$ (x5), không nhồi; chốt lời tại dải đối diện BB 1h (long dải trên, short dải dưới) hoặc điểm 15m (sau khi chạm dải giữa 4h) / hòa vốn +40$ / trail 15m / cắt lỗ chờ sẵn 60-70$ – cái nào đến trước. Rule vào lệnh không đổi (xu hướng 4h + dải BB 1h + toàn bộ rule cũ). Nhánh SL100 (20:23–21:05, 0 lệnh) đã ngừng và lưu trữ. Research: research/lab*.py, data/g6_sl_sweep*.csv.",
+   "tp_opp1h": true
+  },
+  "G7_MTF": {
+   "ladder": [
+    250,
+    300,
+    400,
+    550
+   ],
+   "exit": "15m_outlook_score",
+   "exit_label": "Chốt theo triển vọng chart 15m (không mục tiêu $ cố định, không chốt theo BB 4h): lãi ≥40$ → SL về hòa vốn (lệnh stop chờ sẵn); mỗi nến 15m đóng khi lãi >8$, chấm điểm 8 yếu tố BB15m/RSI/volume/nến/MA80/dư địa; điểm ≤ -3 (≤ -4 nếu lãi <60$) hai nến liên tiếp → đóng toàn bộ",
+   "eps_15m": 8,
+   "be_after_15m": 40,
+   "th_15m": -3,
+   "th_small_15m": -4,
+   "small_15m": 60,
+   "exit_since": "2026-10-10 16:19 (từ đầu, giống mọi nhánh)",
+   "stops": [
+    "SL500"
+   ],
+   "universe": "dynamic",
+   "separate": true,
+   "entry_tf": "1h",
+   "entry_mtf": true,
+   "no_btc": true,
+   "universe_union": [
+    "BASE",
+    "G1",
+    "G3"
+   ],
+   "trend_allow": {
+    "L": [
+     "UP",
+     "SIDEWAYS"
+    ],
+    "S": [
+     "DOWN",
+     "SIDEWAYS"
+    ]
+   },
+   "pb4h_max": 0.5,
+   "sc15_min": 0,
+   "tp_opp1h": true,
+   "rule_label": "shortlist động BASE ∪ G1 ∪ G3 theo từng chiều (rule lọc token không đổi: điểm tôn trọng dải ≥0.75, ổn định 1D, rule nhóm BASE/G1/G3)",
+   "trend_label": "4 phiếu trên nến 4h đóng: dốc MA20 10 nến ≥+1%/≤-1%, giá trên/dưới MA20, MA20 trên/dưới MA50, 2 đỉnh+2 đáy swing gần nhất HH/HL hoặc LH/LL; ≥3 phiếu + dốc cùng dấu = UP/DOWN, còn lại SIDEWAYS",
+   "entry_label": "Chỉ xét động thái 4h/1h/15m của coin, KHÔNG xét BTC. LONG: xu hướng 4h UP/SIDEWAYS + giá ở nửa dưới BB 4h (%B4h ≤0.5, nến 4h đóng gần nhất) + chạm dải dưới BB 1h (nến 1h đóng gần nhất) + xác nhận 15m (điểm triển vọng 15m ≥0 HOẶC một nến 15m đóng quay lại trên dải dưới BB 15m sau khi chạm). SHORT đối xứng: DOWN/SIDEWAYS + %B4h ≥0.5 + chạm dải trên 1h + xác nhận 15m đối xứng. Không bao giờ ngược xu hướng 4h.",
+   "adds_label": "Thang 250/300/400/550 ký quỹ (lãi kép), x5, trần ký quỹ 30%: nhồi khi giá chạm dải 1h cùng chiều VÀ cách lệnh đầu ≥1.5%·k, kiểm tra lại toàn bộ rule (xu hướng 4h, shortlist hiện tại, điểm dải, ổn định 1D, MA20; không BTC). %B4h và xác nhận 15m chỉ áp dụng cho lệnh vào đầu.",
+   "alerts_label": "Cảnh báo giữ như cũ: WARN -250$ (tạm dừng nhồi), CRIT -400$; cắt lỗ chờ sẵn -500$ tự động khớp (CAT -500 trùng mức SL, cắt lỗ đến trước). Không hỏi Vien.",
+   "since": "2026-10-10 16:19 (Vien)",
+   "note": "G7_MTF_SL500 (Vien 10/10 16:19: \"Lập thêm 1 nhánh chính thức. Chỉ quan tâm động thái 4h, 1h và 15 phút của 1 coin. Rule lọc token ko đổi. Ko cần quan tâm điều kiện bit. Sl 500.\"): tài khoản riêng 5000$, mốc đo = lúc triển khai, PnL báo cáo riêng, không cộng gộp. Thoát: hòa vốn +40$, điểm 15m ≤-3 (≤-4 khi lãi <60$, chỉ sau khi chạm dải giữa 4h – C2), trail 15m, chốt tại dải đối diện BB 1h, cắt lỗ chờ sẵn -500$ ròng – cái nào đến trước. Code: strat.BookMTF. Backtest kiểm tra nhanh: research/replay30_g7.py → data/replay30_g7_*.csv."
+  }
+ },
+ "extra_branches": {},
+ "leverage": {
+  "default": 5,
+  "per_branch": {
+   "BASE_SL250": 5
+  },
+  "since": "2026-10-15 13:55",
+  "note": "per-branch override via extra_branches.<name>.lev"
+ },
+ "excluded_coins": [
+  "BTC",
+  "ETH",
+  "PAXG",
+  "XAUT"
+ ],
+ "lock_milestones": {
+  "step": 150.0,
+  "frac": 0.6666666666666666,
+  "note": "Vien 2026-10-16 (t197u): mốc lãi đỉnh mỗi 30$ (net sau phí vào): khi lãi đỉnh chạm mốc M (30,60,90,...) → stop chờ sẵn nâng để khớp stop đạt ≥ 2/3·M ròng (sau phí vào+ra 0.045% và trượt giá 0.05%); chỉ nâng (LONG lên/SHORT xuống), mỗi tick; stop hiệu lực = bảo vệ nhất của {lock 2/3, hòa vốn +40$, trail 15m 30%/50%, SL250}."
+ },
+ "excluded_coins_note": "Vien 15/10: BTC/ETH out of trade list (BTC still market filter). Vien 27/10: PAXG/XAUT (tokenized gold) + all TradFi commodity/equity underlyings out of shortlist/entries; hl.perp_symbols filters COMMODITY/EQUITY/*/TradFi dynamically. Open positions on excluded coins keep normal exits/adds.",
+ "extra_branches_retired": {
+  "BASE_SL250_X10": {
+   "group": "BASE",
+   "stop": "SL250",
+   "lev": 10,
+   "separate": true,
+   "note": "Vien 2026-10-15 ~13:50: clone of BASE_SL250 (same rules/shortlist/gates/exits/compounding/30% margin cap on margin) with leverage x10; separate 5000$ account, flat at start"
+  }
+ },
+ "margin_note_base_20261030": "Vien 30/10 ~09:56: Base = 1 lệnh duy nhất, ký quỹ 20% vốn (1000$ tại 5000$, scale theo vốn = 5000 + PnL đã chốt), KHÔNG nhồi (ladder 1 bậc). Trần 30% cũ vẫn trong code nhưng không còn ràng buộc.",
+ "btc_vol": {
+  "enabled": true,
+  "m15": 1.0,
+  "h1": 1.0,
+  "rng": 1.5,
+  "k": 2,
+  "since": "2026-10-30 ~10:00 (Vien duyệt)",
+  "note": "Zone 1 BTC_VOL: chặn lệnh vào mới VÀ lệnh nhồi cả LONG lẫn SHORT khi |BTC 4x15m|≥1.0% hoặc |nến 1h đang chạy|≥1.0% hoặc biên độ nến 1h đang chạy ≥1.5% hoặc 1 trong 2 nến 1h vừa đóng có |thân|≥1.0% hoặc biên độ ≥1.5% (nguội ~2h). Vị thế đang mở giữ SL/LOCK/TP.",
+  "cool_h": 0.0,
+  "dump_exit": false,
+  "note_stab": "Vien 30/10 10:05-10:06: (1) BTC sập/bơm mạnh (btc_recheck) hoặc BTC_VOL → chặn CẢ LONG và SHORT (vào+nhồi); (2) ổn định = 2h liên tục không có tín hiệu biến động nào (đếm lại từ đầu mỗi khi có tín hiệu mới); (3) khi BTC sập: đóng ngay mọi LONG (ngược xu hướng) theo giá thị trường; SHORT (thuận xu hướng) giữ, thoát theo LOCK/TP/15m. Đối xứng khi BTC bơm mạnh: đóng SHORT, giữ LONG.",
+  "note_cool": "Vien 30/10 12:25: bỏ chờ ổn định 2h sau BTC_VOL (BaseAster)"
+ },
+ "force_universe": [
+  "ASTER"
+ ],
+ "min_equity": 0,
+ "branch_display_name": "BaseAster",
+ "note_c100": "Vien 30/10 12:58 (t539u): 100% von (live 98% = ladder 4900 de chua phi), x5, 1 vi the, khong nhoi; SL = 25% ky quy (1250 tai 5000, strat SL_SCALE nhan theo von/5000); LOCK/BE/trail x5 (research aster90_c100).",
+ "note_min_equity": "Vien 30/10 13:09 (t541u): bo von toi thieu (0 = tat)",
+ "entry_filter": {
+  "mom4h_pct": 0.7,
+  "note": "Vien 30/10 14:29 (t546u): giong BaseAster t544u"
+ }
+}
