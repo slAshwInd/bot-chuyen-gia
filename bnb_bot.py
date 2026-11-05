@@ -293,6 +293,14 @@ def main():
         for n,b in books.items(): b.log=logs[n]
     LIVE.save_cb=save_books
     S3=step3.Step3(B,cfg,LIVE,candles,tg_live.send,lambda e:jl(EVF,e));S3REF[0]=S3      # BƯỚC 3 (Vien 03/11 t631u)
+    SG=None
+    if cfg.get('safe'):      # BaseAster SAFE: cầu dao vào lệnh (BaseAster + Bước 3); size/ngưỡng $ đã nhân k trong config (safe.overlay)
+        import safe as _safe
+        SG=_safe.Guard(dict(cfg['safe'],**(_safe.load_profile(B) or {})),B,notify=tg_live.send,emit=lambda e:jl(EVF,e))
+        SG.extra_trades=lambda:_safe.step3_trades(S3.trf)
+        strat.MOMF=_safe.wrap_momf(strat.MOMF,SG,lambda:LB);S3.guard=SG
+        for k_ in('alert_warn','alert_crit','cat_stop'):CFG[k_]=CFG[k_]*float(cfg['safe']['k'])
+        print('SAFE_ON',json.dumps({k_:cfg['safe'].get(k_) for k_ in('risk_pct','k','notional_x','stop_dist_pct','cooldown_after_sl_h','max_consec_sl','pause_after_streak_h','daily_loss_pct','max_dd_pct')}),flush=True)
     def close_ba(c_,tn,px_,why_):
         try:LB.close(c_,tn,px_,why_,CFG['fee_taker'],kind='EXIT_15M')
         except livecore.VetoClose:return False
@@ -507,6 +515,9 @@ def main():
         btc_update(m.get('BTC'),refetch=True)
         if LIVE.kill_requested():do_kill('KILL file/env',tnow)
         live_sync(tnow,orders=True)
+        if SG is not None and LIVE.sync_ok:
+            try:SG.update(LB.base(),tnow)
+            except Exception as ex_:print('safe update',repr(ex_)[:200],flush=True)
         if LIVE.sync_ok:S3.tick(LB,tnow,m,close_ba)
         for c in ALL:
             cl=BARS[c][BARS[c].closed]
@@ -644,6 +655,7 @@ def main():
             'universes':{g:[c for c in sorted(guni(g),key=lambda c:-sc(c))] for g in G}}
         st['live']=LIVE.status(LB)
         st['step3']=S3.status()
+        if SG is not None:st['safe']=SG.status()
         if SCAN is not None: st['shortlist']=dict(SL_META,busy=SCAN.busy,err=SCAN.err,lists=DYN,lists_short=DYN_S,short_on=SHORT_ON,rules={g:G[g].get('rule_label','') for g in G})
         if time.time()-RKCSV_T[0]>=300 or not os.path.exists(B+'data/bb_rank_latest.csv'):
             RKCSV_T[0]=time.time()

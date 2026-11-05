@@ -26,5 +26,8 @@ o['live']={
  'max_spread_pct':0.15,'max_px_dev_pct':0.5,'stop_backstop_s':25,'stop_update_min_s':8,
  'allowed_abstractions':['binanceUSDM'],'min_equity_to_trade':(c.get('min_equity') or None),
  'seeds':[]}
+import safe as _safe      # BaseAster SAFE: overlay chỉ khi có safe_profile.json (hoặc khóa "safe" trong paper config); không có -> config live y như cũ
+_SP=_safe.load_profile(paper=c)
+if _SP:o=_safe.overlay(o,_SP)
 json.dump(o,open('config_live.json','w',encoding='utf-8'),ensure_ascii=False,indent=1)
 print('config_live.json written; F =',F);print({k:o[k] for k in('stops','daily_target_usd')},o['lock_milestones']['step'],o['trail_15m']['tiers'],{k:B[k] for k in('ladder','eps_15m','be_after_15m','small_15m')})

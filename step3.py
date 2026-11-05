@@ -133,6 +133,10 @@ class Step3:
         if dist>C['max_sl_dist_pct']/100:return skip(f'khoảng cắt lỗ {dist*100:.2f}% > {C["max_sl_dist_pct"]:g}%')
         if age>C['entry_max_min']*60:return skip(f'nến gãy đã đóng {age/60:.0f} phút (> {C["entry_max_min"]} phút)',tg=b['status']=='retry')
         if s.pos:return skip('đang giữ lệnh bước 3 khác')
+        g=getattr(s,'guard',None)      # BaseAster SAFE: cầu dao (nghỉ sau SL / lỗ ngày / sụt từ đỉnh)
+        if g is not None:
+            why=g.check(LB,tnow,b['side'])
+            if why:return skip(why)
         px=m.get(c)
         if px is None:b['status']='retry';return
         if abs(px/b['close']-1)>C['entry_max_dev_pct']/100:return skip(f'giá {px:.5g} lệch {(px/b["close"]-1)*100:+.2f}% so với giá đóng nến gãy (> ±{C["entry_max_dev_pct"]:g}%)')
