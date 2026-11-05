@@ -103,7 +103,6 @@ def order_result_to_status(j):
 class BNX:
     def __init__(s,address=None,key=None,dry_run=None,log=None,max_open_notional=25.0,sign_in_dry=False,base=BASE,expect_agent=None):
         s.base=base;env_live=os.environ.get('BNB_DRY_RUN','1')=='0'
-        if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)),'PAPER_ONLY.flag')):env_live=False   # PAPER install guard
         s.dry_run=True if dry_run is None else bool(dry_run)
         if not env_live:s.dry_run=True              # a live client needs BOTH dry_run=False AND env BNB_DRY_RUN=0
         s.max_open_notional=float(max_open_notional);s.log=log or (lambda e:None);s.sign_in_dry=sign_in_dry
@@ -181,9 +180,6 @@ class BNX:
     def user_state(s):
         """base = USDT wallet balance (realized equity used for sizing); equity = base + unrealized PnL. Positions keyed by coin (one-way mode).
         abstraction: 'binanceUSDM' normally; 'hedgeMode'/'multiAssetsMode' when the account is in a mode this bot does not support (bot halts entries)."""
-        if not s._k and s.dry_run and os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)),'PAPER_ONLY.flag')):
-            v=float(os.environ.get('BNB_PAPER_EQUITY','1006.53'))   # PAPER: virtual account, no key, nothing signed
-            return dict(abstraction='binanceUSDM',usdc_total=v,usdc_hold=0.0,perps_account_value=v,base=v,upnl=0.0,equity=v,positions={},time=None,available=v)
         if not s._k:return dict(abstraction='nokey',usdc_total=0.0,usdc_hold=0.0,perps_account_value=0.0,base=0.0,upnl=0.0,equity=0.0,positions={},time=None,available=0.0)
         a=s.account();pr=s.signed('GET','/fapi/v3/positionRisk')
         usdt=next((x for x in a.get('assets',[]) if x.get('asset')=='USDT'),{})

@@ -51,7 +51,7 @@ def nproc():
     global _np
     if _np is not None:return _np
     try:
-        c='(Get-CimInstance Win32_Process -Filter "Name like \'python%\'" | ?{$_.CommandLine -like \'*hlbot_bnb_x5*bnb_bot.py*\'} | Measure-Object).Count'
+        c='(Get-CimInstance Win32_Process -Filter "Name like \'python%\'" | ?{$_.CommandLine -like \'*'+os.path.dirname(os.path.abspath(__file__))+'*bnb_bot.py*\'} | Measure-Object).Count'
         r=subprocess.run(['powershell','-NoProfile','-Command',c],capture_output=True,text=True,timeout=15,creationflags=0x08000000)
         _np=int((r.stdout or '0').strip() or 0)
     except Exception:_np=-1

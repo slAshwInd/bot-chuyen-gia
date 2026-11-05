@@ -11,7 +11,7 @@ import tg_live
 import step3
 S3REF=[None]
 import bnx as hlx
-DRY=(os.environ.get('BNB_DRY_RUN','1')!='0') or ('--dry' in sys.argv) or os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)),'PAPER_ONLY.flag'))
+DRY=(os.environ.get('BNB_DRY_RUN','1')!='0') or ('--dry' in sys.argv)
 LIVE_MODE=True
 B=os.path.dirname(os.path.abspath(__file__))+os.sep
 def grp(n): return n.replace('_X10','').rsplit('_',1)[0]
