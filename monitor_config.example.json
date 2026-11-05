@@ -1,0 +1,16 @@
+{
+  "summary_interval_min": 120,
+  "session_min": 5,
+  "send_session_to_telegram": false,
+  "alert_cooldown_min": 15,
+  "stale_loop_s": 120,
+  "ip_check_min": 10,
+  "api_fail_threshold": 3,
+  "api_fail_window_min": 5,
+  "proc_check_s": 60,
+  "ip_url": "https://api.ipify.org",
+  "trusted_ips": [
+    "203.0.113.10",
+    "203.0.113.11"
+  ]
+}

@@ -2,6 +2,7 @@
 import os, json, time, re, sys
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 import tg_notify as t
+import mon_common as MC
 OFF='tg_live_offset.txt'
 TRADE={'STEP3_ENTRY','STEP3_EXIT','STEP3_DETECT','ENTRY','ADD','EXIT','STOP','TP_PARTIAL','EXIT_RUNNER','EXIT_15M','TP_PARTIAL_15M'}
 def last_loop():
@@ -156,6 +157,8 @@ def main():
     if not tok or not chat: print('no env'); return
     off=rd()
     threading.Thread(target=_pusher,daemon=True).start()
+    try: t._api('setMyCommands',{'commands':json.dumps([{'command':a,'description':b} for a,b in MC.COMMANDS])})
+    except Exception as ex: print('setMyCommands err',type(ex).__name__,flush=True)
     while True:
         try:
             j=t._api('getUpdates',{'offset':off,'timeout':25},timeout=35)
@@ -166,7 +169,18 @@ def main():
                 c=(m.get('text') or '').strip().split()[:1]; c=c[0].lower().split('@')[0].lstrip('/') if c else ''
                 if c=='pnl': t._send_direct(pnl())
                 elif c=='action': t._send_direct(action())
-                elif c in ('help','start'): t._send_direct('[LIVE] Lệnh: /pnl, /action')
+                elif c=='status': t._send_direct(MC.status_text())
+                elif c=='summary':
+                    a=(m.get('text') or '').split(); mn=int(a[1]) if len(a)>1 and a[1].isdigit() else 60
+                    t._send_direct(MC.summary_text(max(1,min(mn,1440)))[0])
+                elif c=='log': t._send_direct(MC.log_text())
+                elif c=='ip': t._send_direct(MC.ip_text())
+                elif c in ('trustip','untrustip'):
+                    a=(m.get('text') or '').split(); t._send_direct(MC.ip_request(c[:-2], a[1] if len(a)>1 else ''))
+                elif c=='confirm': t._send_direct(MC.ip_confirm())
+                elif c=='cancel': t._send_direct(MC.ip_confirm(cancel=True))
+                elif c in ('help','start'): t._send_direct(MC.HELP)
+                elif c: t._send_direct('[LIVE] Lệnh không hợp lệ.\n'+MC.HELP)
         except Exception as ex:
             print(time.strftime('%H:%M:%S'),'poll err',type(ex).__name__,flush=True); time.sleep(10)
 if __name__=='__main__': main()
