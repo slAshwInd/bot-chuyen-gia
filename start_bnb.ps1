@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Continue'
 $dir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $dir
 $T = 'HLBot BNB X5'
-function Running { Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -and (($_.CommandLine -like '*bnb_bot.py*' -and ($_.CommandLine -like '*hlbot_bnb_x5*' -or $_.ExecutablePath -like '*hlbot_bnb_x5*')) -or $_.CommandLine -like '*hlbot_bnb_x5\run_bnb.ps1*') } }
+function Running { $bd = $dir.TrimEnd('\'); Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -and (($_.CommandLine -like '*bnb_bot.py*' -and ($_.ExecutablePath -like "$bd\*" -or $_.CommandLine -like "*$bd\*")) -or $_.CommandLine -like "*$bd\run_bnb.ps1*") } }
 if (Running) { exit 3 }
 if (-not ((Test-Path (Join-Path $dir 'secrets\binance_api_key.txt')) -and (Test-Path (Join-Path $dir 'secrets\binance_api_secret.txt')))) { exit 4 }
 if (-not (Get-ScheduledTask -TaskName $T -ErrorAction SilentlyContinue)) { exit 7 }
