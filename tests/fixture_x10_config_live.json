@@ -199,8 +199,8 @@
   "note": "Dollar params x factor. Ladder [1500]@5000 = 30% of equity as first-leg margin (Vien 2026-10-17), NO adds. Sizing base = live realized equity (exchange)."
  },
  "live": {
-  "address": "0xA7A9B637eEE9F5Dc41e92Ef9f0c1ABFe6A9CA654",
-  "agent_address": "0x5a7453e4a852ae237688bb89b1ca8fe5343a43d7",
+  "address": "0x0000000000000000000000000000000000000001",
+  "agent_address": "0x0000000000000000000000000000000000000002",
   "branch": "BASE_SL250_X10",
   "leverage": 10,
   "margin_mode": "isolated",

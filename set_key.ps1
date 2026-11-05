@@ -1,5 +1,5 @@
 $ErrorActionPreference='Stop'
-$d='C:\Users\admin\hlbot_bnb_x5\secrets'
+$d=Join-Path $PSScriptRoot 'secrets'; New-Item -ItemType Directory -Force $d | Out-Null
 Write-Host 'NHAP API KEY BINANCE (Futures only, tat rut tien)' -ForegroundColor Yellow
 $k=Read-Host 'API Key'
 $s=Read-Host 'Secret Key' -AsSecureString
