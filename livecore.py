@@ -176,6 +176,9 @@ class Live:
             s.write_journal({});return False,dict(info,why=f'HLXError {ex}')
         np_=s.new_pos(book,c,side,avg,fsz,fee,t,avg*fsz/s.lev);p.clear();p.update(np_)
         return True,info
+    def fills_of_oid(s,c,oid,avg,fsz,fee_est):
+        """Alias used by step3/batday."""
+        return s.fill_of_oid(c,oid,avg,fsz,fee_est)
     def fill_of_oid(s,c,oid,avg,fsz,fee_est):
         """FIX 2026-10-30: entry/add price, qty and fee from the REAL Binance fills (userTrades) of this order, not the order response / limit / signal price."""
         for i in range(5):

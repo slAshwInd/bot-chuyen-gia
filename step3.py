@@ -1,6 +1,6 @@
 """BaseAster STEP 3 (Vien 03/11/2026 t625u/t629u/t631u): trade ASTER after a pump (SHORT) / dump (LONG) that the 0.7% strong-run filter (step 2) blocked.
 Detection at each closed 1h bar: A = ASTER % change vs close 8 bars ago, B = BTC same.
-  pump -> SHORT: A>=5, A-B>=5, B<=+0.5 ; dump -> LONG: A<=-5, B-A>=5, B>=-0.5 ; same-direction detections >=48h apart.
+  pump -> SHORT only: A>=5, A-B>=5, B<=+0.5 ; same-direction detections >=48h apart. LONG dump path removed 06/11 (replaced by batday); legacy LONG pos in state remains readable/managed.
 Wait <=24 1h bars for the break (SHORT: close < previous bar low; LONG: close > previous bar high); peak/trough = extreme since detection (break bar excluded, as backtest).
 Needs a step-2 (mom4h) block of the same side between detection_bar_open-8h and the break bar close. Entry market if break bar closed <=20 min ago and price within +-1% of its close.
 SL = peak*1.01 / trough*0.99 (exchange STOP_MARKET closePosition), TP = entry*0.88 / *1.12 (LIMIT reduce-only), time exit 72h; skip if SL distance >15%.
@@ -11,7 +11,8 @@ import bnx as hlx
 from bnx import HLXError
 COIN='ASTER'
 DEF=dict(enabled=True,coin='ASTER',win=8,move_pct=5.0,rel_pct=5.0,btc_tol_pct=0.5,gap_h=48,wait_bars=24,sl_buf_pct=1.0,tp_pct=12.0,hold_h=72,risk_pct=25.0,max_notional_x=5.0,
-         max_sl_dist_pct=15.0,entry_max_min=20,entry_max_dev_pct=1.0,lev=5,block_pre_h=8,require_block=True,entry_slip_pct=0.3)
+         max_sl_dist_pct=15.0,entry_max_min=20,entry_max_dev_pct=1.0,lev=5,block_pre_h=8,require_block=True,entry_slip_pct=0.3,
+         long_enabled=False)  # Vien 06/11: LONG bước 3 cũ tắt; thay bằng module batday (bắt đáy)
 def vn_now():return dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)+dt.timedelta(hours=7)
 H=pd.Timedelta('1h')
 class Detector:
@@ -36,7 +37,8 @@ class Detector:
             a=(r.c/A.c.iloc[j-w]-1)*100;b0=Bc.get(A.index[j-w]);b1=Bc.get(t)
             if b0 and b1:
                 b=(b1/b0-1)*100
-                for sd,ok in (('S',a>=C['move_pct'] and a-b>=C['rel_pct'] and b<=C['btc_tol_pct']),('L',a<=-C['move_pct'] and b-a>=C['rel_pct'] and b>=-C['btc_tol_pct'])):
+                # LONG dump path removed (replaced by batday). SHORT pump path unchanged.
+                for sd,ok in (('S',a>=C['move_pct'] and a-b>=C['rel_pct'] and b<=C['btc_tol_pct']),):
                     ld=s.last_det.get(sd)
                     if ok and (ld is None or t-ld>=pd.Timedelta(hours=C['gap_h'])):
                         s.last_det[sd]=t;pk=float(r.h) if sd=='S' else float(r.l)
@@ -56,6 +58,7 @@ class Step3:
         s.A=None;s.Bc=None;s.fetch_t=0;s.err=None;s.last_chk=0;s.init_done=bool(st)
         if not st:s._seed_blocks()
         if s.pos:s.L.foreign.add(s.C['coin'])
+        s.entry_block=None      # optional hook ()->(bool,why): batday holding -> SHORT break skipped (not deferred)
     # ---------------- persistence / io
     def save(s):
         d=dict(det=s.D.dump(),blocks=[list(b) for b in s.blocks],pos=s.pos,breaks=s.breaks[-20:],hist=s.hist[-50:],updated=str(vn_now().replace(microsecond=0)),cfg=s.C)
@@ -128,6 +131,12 @@ class Step3:
         sl=b['peak']*(1+C['sl_buf_pct']/100) if sh else b['peak']*(1-C['sl_buf_pct']/100);dist=abs(sl/b['close']-1)
         def skip(why,tg=True):
             b['status']='skip:'+why;s.ev('STEP3_SKIP',f"BƯỚC 3 – không vào {sd} ASTER (nến gãy đóng {b['t_close'][11:16]} giá {b['close']:.5g}): {why}",tg=tg and age<=3600)
+        if (not sh) and (not C.get('long_enabled', False)):
+            return skip('LONG bước 3 cũ đã tắt – thay bằng module bắt đáy (batday)', tg=False)
+        if s.entry_block is not None:
+            try:blk_,why_=s.entry_block()
+            except Exception as ex_:blk_,why_=True,f'entry_block error {ex_}'
+            if blk_:return skip(why_,tg=False)
         blk=blocked_in(s.blocks,b['side'],b['det_bar'],b['t_close'],C['block_pre_h'])
         if C.get('require_block',True) and not blk:return skip('bước 2 (lọc 0,7%) không chặn tín hiệu BaseAster cùng chiều trong cửa sổ → không áp dụng bước 3',tg=False)
         if dist>C['max_sl_dist_pct']/100:return skip(f'khoảng cắt lỗ {dist*100:.2f}% > {C["max_sl_dist_pct"]:g}%')
@@ -244,5 +253,5 @@ class Step3:
         s.pos=None;s.L.foreign.discard(c);s.save()
         s.ev('STEP3_EXIT',f"BƯỚC 3 – ĐÓNG {sd} ASTER: {why}; giá ra {ex_px if ex_px is None else f'{ex_px:.5g}'} (vào {p['entry']:.5g}), lãi/lỗ ròng {('%+.2f$'%net) if net is not None else '?'}.",price=ex_px,side=sd,net=net,why=why)
     def status(s):
-        return dict(enabled=s.on,pos=s.pos,pending=s.D.pend,last_det=s.D.dump()['last_det'],last_bar=str(s.D.last_bar) if s.D.last_bar is not None else None,
+        return dict(enabled=s.on,long_enabled=bool(s.C.get('long_enabled',False)),pos=s.pos,pending=s.D.pend,last_det=s.D.dump()['last_det'],last_bar=str(s.D.last_bar) if s.D.last_bar is not None else None,
                     blocks_recent=s.blocks[-6:],last_breaks=s.breaks[-3:],err=s.err)

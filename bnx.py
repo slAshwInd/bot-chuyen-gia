@@ -253,6 +253,16 @@ class BNX:
         st=order_result_to_status(j)
         if 'error' in st and 'code' in j:return {'status':'err','response':j}
         return _ok([st])
+    def limit_postonly(s,coin,is_buy,sz,px,reduce_only=False,label=''):
+        """Post-only LIMIT (Binance timeInForce=GTX). Rejected if it would take liquidity."""
+        a=s.asset(coin);sp=a['spec'];s._guard(not reduce_only,float(px)*float(sz))
+        p=dict(symbol=a['asset'],side='BUY' if is_buy else 'SELL',type='LIMIT',timeInForce='GTX',quantity=fmt(sz,sp.step),price=fmt(px,sp.tick),newOrderRespType='RESULT')
+        if reduce_only:p['reduceOnly']='true'
+        j=s.send('POST','/fapi/v1/order',p,label or f'postonly {coin}')
+        if j.get('dry'):return j
+        st=order_result_to_status(j)
+        if 'error' in st and 'code' in j:return {'status':'err','response':j}
+        return _ok([st])
     def stop(s,coin,close_is_buy,sz,trigger_px,limit_px=None,label=''):
         """Protective stop: algo STOP_MARKET closePosition=true (closes the whole position when MARK price crosses trigger). sz/limit_px unused (kept for the hlx interface)."""
         a=s.asset(coin);sp=a['spec']

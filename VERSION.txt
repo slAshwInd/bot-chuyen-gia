@@ -1,0 +1,1 @@
+BaseAster 1.2 (đổi tên từ BaseAster 1.2.1; mã/config không đổi) — đóng gói 2026-11-06 UTC+7

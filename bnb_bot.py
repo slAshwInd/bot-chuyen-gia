@@ -9,7 +9,9 @@ from hl import *;import strat,bbrank;from strat import CFG,Book,btc_regime
 import sys,livecore
 import tg_live
 import step3
+import batday
 S3REF=[None]
+BDREF=[None]
 import bnx as hlx
 DRY=(os.environ.get('BNB_DRY_RUN','1')!='0') or ('--dry' in sys.argv)
 LIVE_MODE=True
@@ -292,7 +294,21 @@ def main():
         pickle.dump(books,open(sp+'.tmp','wb'));os.replace(sp+'.tmp',sp)
         for n,b in books.items(): b.log=logs[n]
     LIVE.save_cb=save_books
-    S3=step3.Step3(B,cfg,LIVE,candles,tg_live.send,lambda e:jl(EVF,e));S3REF[0]=S3      # BƯỚC 3 (Vien 03/11 t631u)
+    S3=step3.Step3(B,cfg,LIVE,candles,tg_live.send,lambda e:jl(EVF,e));S3REF[0]=S3      # BƯỚC 3 SHORT (Vien 03/11); LONG path off
+    def _batday_busy():
+        c_=str((cfg.get('batday') or {}).get('coin') or 'ASTER')
+        if S3.pos: return True, 'đang giữ bước 3'
+        if c_ in LB.pos: return True, 'BaseAster đang giữ '+c_
+        st_=LIVE.st or {}
+        if st_.get('positions'): return True, 'sàn còn vị thế: '+','.join(sorted(st_['positions']))
+        try:
+            jr=LIVE.read_journal() or {}
+            if jr.get('coin'): return True, 'pending entry '+str(jr.get('coin'))
+        except Exception: pass
+        return False, ''
+    BD=batday.BatDay(B,cfg,LIVE,candles,bb,tg_live.send,lambda e:jl(EVF,e),busy_check=_batday_busy);BDREF[0]=BD
+    S3.entry_block=lambda:(BD.holding(),'module bắt đáy đang giữ/đang vào lệnh: bỏ qua tín hiệu SHORT sau bơm (không hoãn)')
+    print('BATDAY enabled=%s dry_run=%s (replaces step3 LONG; step3.long_enabled=%s) CYCLE_S=%s FAST=%s'%(BD.on, BD.mod_dry or LIVE.dry, bool(S3.C.get('long_enabled',False)), cfg.get('cycle_s',5), FAST), flush=True)
     def close_ba(c_,tn,px_,why_):
         try:LB.close(c_,tn,px_,why_,CFG['fee_taker'],kind='EXIT_15M')
         except livecore.VetoClose:return False
@@ -445,7 +461,7 @@ def main():
         for n in BRC:books[n].sl_guard=True
         jl(EVF,dict(time=str(now().replace(microsecond=0)),event='CONFIG_CHANGE',coin='*',price=0,signal_id='CONFIG_CHANGE|shortlist_guard',branches=list(BRC),
             reason=f'Siết bảo đảm shortlist theo yêu cầu Vien (09/10 18:41 "shortlist rules must be guaranteed absolutely"): mọi lệnh vào VÀ lệnh nhồi, cả LONG lẫn SHORT, chỉ được dùng coin đang nằm trong shortlist động hiện tại của đúng chiều đó (điểm tôn trọng dải tương ứng ≥{BB_MIN}, ổn định 1D, rule nhóm); lệnh nhồi trên coin đã rời shortlist chiều đó bị chặn (ADD_BLOCKED_RULES), vị thế vẫn được quản lý/thoát bình thường; không bao giờ dùng danh sách coin cũ/cố định; shortlist cũ hơn {SL_MAX_AGE_H:.0f}h (quét lỗi) → không vào/nhồi mới đến khi quét lại thành công; thiếu dữ liệu ổn định 1D → không đạt (trước đây mặc định đạt).'))
-    CYCLE_S=float(CFG.get('cycle_s',15)); RKCSV_T=[0.0]; print('CYCLE_S',CYCLE_S,flush=True)      # Vien 04/11 t689u: main cycle 60s -> 15s (configurable)
+    CYCLE_S=float(cfg.get('cycle_s', CFG.get('cycle_s',5))); RKCSV_T=[0.0]; print('CYCLE_S',CYCLE_S,flush=True)      # Vien 06/11: main cycle default 15s -> 5s (configurable via config_live.cycle_s); FAST/stop throttles unchanged
     while True:
         t0=time.time()
         if time.time()-reg_t>3600 or reg is None:
@@ -507,7 +523,11 @@ def main():
         btc_update(m.get('BTC'),refetch=True)
         if LIVE.kill_requested():do_kill('KILL file/env',tnow)
         live_sync(tnow,orders=True)
-        if LIVE.sync_ok:S3.tick(LB,tnow,m,close_ba)
+        if LIVE.sync_ok:
+            def _flat():
+                bsy,w=_batday_busy(); return (not bsy), w
+            BD.tick(LB,tnow,m,account_flat_fn=_flat)
+            S3.tick(LB,tnow,m,close_ba)      # detector always advances (no catch-up replay); SHORT entries are DISCARDED while batday holds (S3.entry_block)
         for c in ALL:
             cl=BARS[c][BARS[c].closed]
             newbar=cl.index[-1]!=lastclosed.get(c);cb[c]=cl.iloc[-1] if (newbar and c in lastclosed) else None;lastclosed[c]=cl.index[-1]
@@ -610,6 +630,8 @@ def main():
                     st['filtered'].setdefault(f'{c}|{sd_}',dict(time=str(tnow),side='SHORT' if sd_=='S' else 'LONG',why=rk['why'],branches=[]))['branches'].append(name)
                 cl=BARS[c][BARS[c].closed]
                 if isinstance(book,strat.BookMTF):get15(c);book.m15=M15      # G7_MTF: 15m confirmation needs the coin's closed 15m candles
+                if BD.holding():
+                    continue  # bắt đáy đang giữ/đang vào: BaseAster không vào lệnh mới
                 book.try_entry(c,tnow,m[c],cl,reg,rk=rk,side=sd_,**({'band':H1C[c].iloc[-1],'blbl':'1h'} if T1 else ({'band':seed_bo[(c,sd_)]} if (c,sd_) in seed_bo else {})))
                 if c in book.pos: book.pos[c].setdefault('m1',str(pd.Timestamp(tnow).floor('min')))
             for c_ in list(book.pos):LIVE.stop_sync(book,c_,tnow)
@@ -643,7 +665,7 @@ def main():
         st['ranking']={'bb_min':BB_MIN,'stab_rule':dict(bbrank.ST),'coins':{c:{k:v for k,v in (RANK.get(c) or {}).items()} for c in ALL},
             'universes':{g:[c for c in sorted(guni(g),key=lambda c:-sc(c))] for g in G}}
         st['live']=LIVE.status(LB)
-        st['step3']=S3.status()
+        st['step3']=S3.status(); st['batday']=BD.status()
         if SCAN is not None: st['shortlist']=dict(SL_META,busy=SCAN.busy,err=SCAN.err,lists=DYN,lists_short=DYN_S,short_on=SHORT_ON,rules={g:G[g].get('rule_label','') for g in G})
         if time.time()-RKCSV_T[0]>=300 or not os.path.exists(B+'data/bb_rank_latest.csv'):
             RKCSV_T[0]=time.time()
@@ -659,7 +681,7 @@ def main():
         json.dump(st,open(STF+'.tmp','w'),ensure_ascii=False,indent=1,default=str);os.replace(STF+'.tmp',STF)
         save_books()
         try:      # [monitor patch] one heartbeat/decision line per 60s cycle
-            _lv=st.get('live') or {};print('LOOP',str(tnow),'sync_ok=%s'%_lv.get('sync_ok'),'halted=%s'%_lv.get('halted'),'equity=%s'%_lv.get('equity'),'pos=%s'%sorted(_lv.get('exchange_positions') or {}),'stops=%s'%sorted(_lv.get('stops') or {}),'btc_allow=%s/%s'%((st.get('btc') or {}).get('allow'),(st.get('btc') or {}).get('allow_s')),'btc_block=%s/%s'%((st.get('btc_recheck') or {}).get('block'),(st.get('btc_recheck') or {}).get('block_s')),'step3=%s'%(('POS_'+S3.pos['side']) if S3.pos else ('WAIT_'+'/'.join(p_['side'] for p_ in S3.D.pend) if S3.D.pend else 'idle')),'watch='+','.join(f"{k_}:{v_['price']}(lo{(v_['price']/v_['lo']-1)*100:+.2f}%/up{(v_['up']/v_['price']-1)*100:.2f}%)" for k_,v_ in (st.get('watch') or {}).items() if v_.get('lo') and v_.get('up')),flush=True)
+            _lv=st.get('live') or {};print('LOOP',str(tnow),'sync_ok=%s'%_lv.get('sync_ok'),'halted=%s'%_lv.get('halted'),'equity=%s'%_lv.get('equity'),'pos=%s'%sorted(_lv.get('exchange_positions') or {}),'stops=%s'%sorted(_lv.get('stops') or {}),'btc_allow=%s/%s'%((st.get('btc') or {}).get('allow'),(st.get('btc') or {}).get('allow_s')),'btc_block=%s/%s'%((st.get('btc_recheck') or {}).get('block'),(st.get('btc_recheck') or {}).get('block_s')),'step3=%s'%((('POS_'+S3.pos['side']) if S3.pos else ('WAIT_'+'/'.join(p_['side'] for p_ in S3.D.pend) if S3.D.pend else 'idle'))),'batday=%s'%(('POS' if BD.pos else ('PEND' if BD.pend else ('on' if BD.on else 'off')))),'watch='+','.join(f"{k_}:{v_['price']}(lo{(v_['price']/v_['lo']-1)*100:+.2f}%/up{(v_['up']/v_['price']-1)*100:.2f}%)" for k_,v_ in (st.get('watch') or {}).items() if v_.get('lo') and v_.get('up')),flush=True)
         except Exception as _ex:print('LOOP log err',_ex,flush=True)
         # fast loop until the next CYCLE_S cycle: every ~5s, allMids -> resting stops / trails / adds / TPs for open positions only
         while time.time()-t0<CYCLE_S-0.5:      # sleep in FAST steps (last step trimmed) so a full cycle = CYCLE_S

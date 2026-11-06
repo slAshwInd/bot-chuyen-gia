@@ -258,5 +258,35 @@
   "min_equity_to_trade": null,
   "seeds": []
  },
- "start_capital": 1000.0
+ "start_capital": 1000.0,
+ "cycle_s": 5,
+ "step3": {
+  "enabled": true,
+  "long_enabled": false,
+  "note": "Vien 06/11: SHORT bước 3 giữ nguyên; LONG bước 3 cũ tắt, thay bằng batday (bắt đáy). Legacy LONG state (nếu còn) vẫn đọc/quản lý được, không chuyển thầm."
+ },
+ "batday": {
+  "enabled": true,
+  "dry_run": false,
+  "coin": "ASTER",
+  "so_nen": 6,
+  "giam_pct": 3.0,
+  "can_bi_chan": true,
+  "mom_pct": 0.7,
+  "gian_cach_h": 12,
+  "loc_bb4h_rong_max_pct": 15.0,
+  "loc_btc_24h_min_pct": -8.0,
+  "notional_x_von": 4.9,
+  "tp_pct": 1.5,
+  "sl_pct": 2.0,
+  "giu_toi_da_h": 6,
+  "postonly_wait_s": 20,
+  "entry_window_min": 3,
+  "entry_dev_pct": 1.0,
+  "ioc_ask_buf_pct": 0.3,
+  "sl_backstop_extra_pct": 0.3,
+  "sl_backstop_s": 25,
+  "lev": 5,
+  "note": "Vien 06/11: module bắt đáy LONG thay LONG bước 3. enabled=true, dry_run=false trong SOURCE copy (chưa deploy live). HTML claim already-live chưa xác minh trên PC. Tắt hẳn: enabled=false; chỉ báo cáo: dry_run=true."
+ }
 }
