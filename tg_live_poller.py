@@ -37,16 +37,9 @@ BLOCK_PFX=('ENTRY_BLOCKED','ADD_BLOCKED')
 BLOCK_EV={'LIVE_ENTRY_VETO','LIVE_ENTRY_FAILED','STEP3_SKIP','STEP3_ABORT','STEP3_DROP','STEP3_ENTRY_FAILED'}
 def _isact(ev): return ev in TRADE or ev in BLOCK_EV or ev.startswith(BLOCK_PFX)
 def _fmt(e):
-    ev=str(e.get('event','')); tm=str(e.get('time',''))[5:16].replace('-','/')
-    if ev.startswith(BLOCK_PFX) or ev in BLOCK_EV:
-        lbl={'ENTRY_BLOCKED_RULES':'⛔ CHẶN VÀO LỆNH (rule)','ENTRY_BLOCKED_BTC':'⛔ CHẶN VÀO LỆNH (BTC)','ADD_BLOCKED_RULES':'⛔ CHẶN NHỒI (rule)','ADD_BLOCKED_BTC':'⛔ CHẶN NHỒI (BTC)',
-             'LIVE_ENTRY_VETO':'⛔ SÀN TỪ CHỐI VÀO LỆNH','LIVE_ENTRY_FAILED':'⚠️ VÀO LỆNH THẬT THẤT BẠI'}.get(ev,'⛔ BƯỚC 3: '+ev.replace('STEP3_',''))
-        sd=e.get('side') or ''; px=e.get('price'); r=str(e.get('reason') or '')
-        r=r.split(': ',1)[1] if r.startswith('Chặn') and ': ' in r else r
-        return f"{tm} {lbl} {sd} {e.get('coin','')}"+(f" @ {px}" if px not in (None,'',0,'0') else '')+f"\nLý do: {r[:300]}"
-    if ev.startswith('STEP3'): return f"{tm} 🔷 {e.get('reason')}"
-    try: return t.format_action(e)
-    except Exception: return f"{tm} {ev} {e.get('coin')} @ {e.get('price')}"
+    from reporting import action_text
+    return action_text(e)
+
 def action(n=5):
     evs=[];seen={}
     try:
@@ -74,7 +67,7 @@ def _push_ok(ev): return ev.startswith(BLOCK_PFX) or ev in PUSH_EV
 def _pfmt(e):
     ev=str(e.get('event',''))
     if ev in ('TRAIL_15M','DAILY_TARGET_HIT','LIVE_FLATTEN'):
-        lbl={'TRAIL_15M':'🔒 LOCK/TRAIL','DAILY_TARGET_HIT':'🎯 ĐẠT MỤC TIÊU NGÀY','LIVE_FLATTEN':'⚠️ ĐÓNG HẾT VỊ THẾ'}[ev]
+        lbl={'TRAIL_15M':'🔒 DỜI MỨC BẢO VỆ','DAILY_TARGET_HIT':'🎯 ĐẠT MỤC TIÊU NGÀY','LIVE_FLATTEN':'⚠️ ĐÓNG HẾT VỊ THẾ'}[ev]
         tm=str(e.get('time',''))[5:16].replace('-','/');px=e.get('price')
         return f"{tm} {lbl} {e.get('coin','')}"+(f" @ {px}" if px not in (None,'',0,'0') else '')+f"\nLý do: {str(e.get('reason') or '')[:300]}"
     return _fmt(e)

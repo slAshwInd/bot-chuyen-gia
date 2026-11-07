@@ -26,26 +26,26 @@ class ReportingTests(unittest.TestCase):
         self.assertIn('+200.00 (+10.00%)',txt)
         self.assertIn('+150.00 USDT',txt)
         self.assertIn('+2.50%',txt)
-        self.assertIn('CHUA DOI SOAT',txt)
+        self.assertIn('chưa đối soát',txt)
     def test_missing_deposit_is_unknown_not_hardcoded(self):
         self.state()
-        self.assertIn('CHUA CAU HINH',R.pnl_text(self.root))
+        self.assertIn('CHƯA CẤU HÌNH',R.pnl_text(self.root))
 
     def test_config_capital_precedence(self):
         self.state(); self.write('config_live.json',{'start_capital':1200})
         self.assertIn('1,200.00',R.pnl_text(self.root))
     def test_missing_csv_is_unknown_not_zero_or_paper(self):
         self.state()
-        self.assertIn('Net CSV: KHONG XAC DINH',R.pnl_text(self.root))
+        self.assertIn('Lãi/lỗ ròng CSV: CHƯA XÁC ĐỊNH',R.pnl_text(self.root))
     def test_invalid_net_not_counted_as_zero(self):
         self.state()
         (self.root/'trades_live.csv').write_text('net\nNaN\nbad\n0\n',encoding='utf-8')
         text=R.pnl_text(self.root)
-        self.assertIn('CSV: 1 ban ghi',text)
-        self.assertIn('2 dong net khong hop le',text)
+        self.assertIn('CSV: 1 bản ghi',text)
+        self.assertIn('2 dòng lãi/lỗ không hợp lệ',text)
     def test_zero_balance_preserved(self):
         self.write('state_live.json',{'live':{'usdc_total':0,'equity':0,'base':1000,'upnl':0}})
-        self.assertIn('Balance: 0.00',R.pnl_text(self.root))
+        self.assertIn('Số dư: 0.00',R.pnl_text(self.root))
     def test_interval_boundaries_reasons_and_no_entry(self):
         t0=dt.datetime(2026,11,7,12)
         t1=t0+dt.timedelta(hours=2)
@@ -57,13 +57,13 @@ class ReportingTests(unittest.TestCase):
         text,r=R.summary(self.root,t0,t1,M.parse_loop,M.classify)
         self.assertEqual((r['loops'],r['entries'],r['no_entry']),(3,1,2))
         self.assertEqual(r['blocked'],{'ENTRY_BLOCKED_BTC':1})
-        self.assertIn('BTC chan: 1',text)
+        self.assertIn('BTC chặn: 1',text)
         self.assertLess(len(text),1801)
     def test_empty_window_does_not_invent_reason(self):
         t=dt.datetime(2026,11,7)
         text,r=R.summary(self.root,t,t+dt.timedelta(hours=2),M.parse_loop,M.classify)
         self.assertEqual(r['loops'],0)
-        self.assertIn('khong co ly do duoc ghi',text)
+        self.assertIn('không có lý do được ghi',text)
     def test_service_authoritative_query(self):
         class Result:
             stdout='Running|1\n'; returncode=0
@@ -76,7 +76,7 @@ class ReportingTests(unittest.TestCase):
             self.assertIn(r'\bbnb_bot\.py\b',ps)
     def test_positions_not_lost_in_pnl(self):
         self.write('state_live.json',{'live':{'exchange_positions':{'BNB':{'szi':-2,'entryPx':500,'upnl':3}}}})
-        self.assertIn('BNB SHORT',R.pnl_text(self.root))
+        self.assertIn('BNB Bán',R.pnl_text(self.root))
     def test_multiple_bot_processes_are_abnormal(self):
         lp={'ts':dt.datetime.now(),'sync_ok':'True','halted':'None','equity':1100,'pos':'[]'}
         with patch.object(M,'last_loop',return_value=lp),patch.object(M,'proc_task',return_value=('Running',2)),patch.object(M,'cfg',return_value={'stale_loop_s':120}):
@@ -90,7 +90,7 @@ class ReportingTests(unittest.TestCase):
             self.assertIn('($_.ProcessId -in $ids -or ($_.CommandLine -and',ps)
     def test_valid_json_non_objects_do_not_crash(self):
         self.write('state_live.json',[])
-        self.assertIn('khong doc duoc',R.pnl_text(self.root))
+        self.assertIn('không đọc được',R.pnl_text(self.root))
         (self.root/'events_live.jsonl').write_text('[]\nnull\n',encoding='utf-8')
         now=dt.datetime(2026,11,7)
         self.assertEqual(R.summary(self.root,now,now+dt.timedelta(hours=2),M.parse_loop,M.classify)[1]['entries'],0)
@@ -148,5 +148,67 @@ class ReportingTests(unittest.TestCase):
     def test_all_python_syntax(self):
         for f in Path(__file__).parent.glob('*.py'):
             ast.parse(f.read_text(encoding='utf-8-sig'),filename=f.name)
+
+    def current(self, **kw):
+        d={'updated':'2026-11-07 15:30:00','live':{'sync_ok':True,'halted':None,'exchange_positions':{}},'watch':{'ASTER':{'price':10,'lo':9,'up':12,'mid':10.5}},'btc':{'allow':True,'allow_s':False,'d1_pb':0.2,'w1_pb':0.6},'btc_recheck':{'block':False,'block_s':True,'why_s':['tăng mạnh'],'info':{'m15x4':2}},'ranking':{'bb_min':0.5,'coins':{'ASTER':{'score':0.7,'short':{'score':0.8},'stab_ok':True}}}}
+        d.update(kw);self.write('state_live.json',d)
+        return d
+    def test_decision_concrete_bands_btc_and_unknown_rules(self):
+        self.current()
+        text=R.decision_text(self.root,dt.datetime(2026,11,7,15,30,30))
+        for x in ['Mua: chờ giá ≤ 9','Bán hồi: chờ giá ≥ 12','cho mua có, bán không','chặn mua không, bán có','tăng mạnh','MA20','không đồng nghĩa sẽ vào lệnh']:
+            self.assertIn(x,text)
+    def test_decision_stale_and_missing(self):
+        self.assertIn('thiếu dữ liệu',R.decision_text(self.root))
+        self.current()
+        self.assertIn('CŨ/CHƯA XÁC MINH',R.decision_text(self.root,dt.datetime(2026,11,7,16)))
+    def test_unknown_exchange_is_not_flat(self):
+        self.current(live={})
+        text=R.decision_text(self.root)
+        self.assertIn('không mặc định là rỗng',text)
+        self.assertNotIn('Chưa có vị thế theo',text)
+        self.assertNotIn('Mua: chờ',text)
+    def test_h1_trigger_never_uses_4h_band(self):
+        self.current(trend1h={'ASTER':{'lo1h':8,'up1h':13}})
+        text=R.decision_text(self.root)
+        self.assertIn('dải 1 giờ',text)
+        self.assertIn('Mua: chờ giá ≤ 8',text)
+        self.assertNotIn('Mua: chờ giá ≤ 9',text)
+    def test_open_position_next_action_and_active_branch_only(self):
+        pos={'ASTER':{'stop_px':9.1,'trail':9.3,'outlook_15m':{'score':-2,'th':-3,'candle':'15:15'},'mid4h_hit':None}}
+        self.current(live={'exchange_positions':{'ASTER':{'szi':1,'entryPx':10}}},branches={'LIVE':{'positions':pos,'exit_rule':'15m'},'PAPER':{'positions':{'ASTER':{'stop_px':999}},'exit_rule':'15m'}})
+        self.write('config_live.json',{'live':{'branch':'LIVE'},'exit_hold_mid4h':{'enabled':True}})
+        text=R.decision_text(self.root)
+        for x in ['dừng bảo vệ 9.1','khóa lãi 9.3','Điểm 15 phút: -2 / ngưỡng -3','dải giữa 4 giờ: 10.5','Không có giá chốt cố định']:
+            self.assertIn(x,text)
+        self.assertNotIn('999',text)
+        self.assertNotIn('Mua: chờ',text)
+    def test_position_unmatched_is_unknown(self):
+        self.current(live={'exchange_positions':{'ASTER':{'szi':-1,'entryPx':10}}})
+        self.assertIn('chưa xác định mốc tiếp theo',R.decision_text(self.root))
+    def test_summary_keeps_metrics_and_adds_current_section(self):
+        self.current()
+        t=dt.datetime(2026,11,7,15,31)
+        text,stats=R.summary(self.root,t-dt.timedelta(hours=1),t,M.parse_loop,M.classify)
+        self.assertEqual(stats['entries'],0)
+        self.assertIn('Hiện tại — dữ liệu 2026-11-07 15:30:00',text)
+        self.assertLess(len(text),3901)
+    def test_decision_does_not_write_or_import_trading(self):
+        self.current()
+        before={p.name:p.read_bytes() for p in self.root.iterdir()}
+        R.decision_text(self.root)
+        self.assertEqual(before,{p.name:p.read_bytes() for p in self.root.iterdir()})
+        tree=ast.parse(Path(R.__file__).read_text(encoding='utf-8'))
+        imports=[n.module for n in ast.walk(tree) if isinstance(n,ast.ImportFrom)]+[a.name for n in ast.walk(tree) if isinstance(n,ast.Import) for a in n.names]
+        self.assertFalse(set(imports)&{'strat','bnb_bot','livecore','bnx','tg_notify'})
+    def test_action_vietnamese_preserves_reason_and_net(self):
+        txt=R.action_text({'event':'EXIT','side':'SHORT','coin':'ASTER','reason':'Lý do gốc','per_branch':{'X':{'net':1.5}}})
+        for x in ['Đóng lệnh Bán ASTER','Lý do gốc','lãi/lỗ ròng +1.50']:self.assertIn(x,txt)
+    def test_utf8_and_menu_description_lengths(self):
+        for command, description in M.COMMANDS:
+            self.assertTrue(1<=len(description)<=256)
+            self.assertNotIn('\ufffd',description)
+        for file in ['reporting.py','mon_common.py','tg_live_poller.py']:
+            self.assertNotIn('\ufffd',Path(R.__file__).with_name(file).read_text(encoding='utf-8'))
 
 if __name__=='__main__': unittest.main(verbosity=2)

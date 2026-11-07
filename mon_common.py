@@ -158,18 +158,18 @@ def last_errors(n=8):
     return res[-n:][::-1]
 def log_text(n=8):
     e = last_errors(n)
-    return '[LIVE] LỖI GẦN NHẤT (mới nhất trước):\n' + ('\n'.join(e) if e else 'Không có lỗi trong log gần đây.')
-HELP = ("[LIVE] Các lệnh được phép (chỉ đọc, không đặt lệnh):\n"
-        "/status – bot có chạy không, task, tiến trình, LOOP cuối, equity, vị thế, lỗi cuối\n"
-        "/pnl – vốn, số lệnh, PNL\n/action – các hành động gần nhất (vào/thoát/chặn)\n"
-        "/summary – tổng hợp 60 phút gần nhất (gõ /summary 15 để chọn số phút)\n"
+    return '[LIVE] LỖI GẦN NHẤT (mới nhất trước; giữ nguyên chi tiết kỹ thuật):\n' + ('\n'.join(e) if e else 'Không có lỗi trong log gần đây.')
+HELP = ("[LIVE] Lệnh báo cáo và quản lý IP (không đặt lệnh giao dịch):\n"
+        "/status – trạng thái dịch vụ và vị thế, ngắn gọn\n"
+        "/pnl – vốn nạp, số dư, lãi/lỗ\n/action – các hành động gần nhất (vào/thoát/chặn)\n"
+        "/summary – tổng hợp 60 phút và điều kiện hiện tại (gõ /summary 15 để chọn số phút)\n"
         "/log – các lỗi gần nhất trong log\n"
-        "/ip – IP hiện tại + danh sách IP đã trust\n/trustip <ip> – thêm IP trust (cần /confirm)\n"
-        "/untrustip <ip> – xoá IP trust (cần /confirm)\n/confirm, /cancel – xác nhận / huỷ\n/help – danh sách lệnh")
-COMMANDS = [('status', 'Bot có đang chạy không + trạng thái'), ('pnl', 'Vốn, số lệnh, PNL'),
-            ('action', 'Hành động gần nhất'), ('summary', 'Tổng hợp 60 phút (vd /summary 15)'),
-            ('log', 'Lỗi gần nhất trong log'), ('ip', 'IP hiện tại + danh sách trust'),
-            ('trustip', 'Thêm IP trust: /trustip 1.2.3.4'), ('untrustip', 'Xoá IP trust'),
+        "/ip – IP hiện tại + danh sách IP tin cậy\n/trustip <ip> – thêm IP tin cậy (cần /confirm)\n"
+        "/untrustip <ip> – xoá IP tin cậy (cần /confirm)\n/confirm, /cancel – xác nhận / huỷ\n/help – danh sách lệnh")
+COMMANDS = [('status', 'Bot có đang chạy không + trạng thái'), ('pnl', 'Vốn nạp, số dư, lãi/lỗ'),
+            ('action', 'Hành động gần nhất'), ('summary', 'Tổng hợp và mốc xử lý tiếp theo'),
+            ('log', 'Lỗi gần nhất trong log'), ('ip', 'IP hiện tại + danh sách tin cậy'),
+            ('trustip', 'Thêm IP tin cậy: /trustip 1.2.3.4'), ('untrustip', 'Xoá IP tin cậy'),
             ('confirm', 'Xác nhận thay đổi IP'), ('cancel', 'Huỷ thay đổi IP'), ('help', 'Danh sách lệnh')]
 
 # ---- Trusted IP (05/11): danh sach IP da whitelist tren Binance, luu trong monitor_config.json 'trusted_ips'
@@ -195,26 +195,26 @@ def public_ip(c=None):
     except Exception: return None
 def ip_text():
     c = cfg(); ip = public_ip(c); tl = trusted_ips(c)
-    st = ('✅ nằm trong danh sách trust' if ip in tl else '⚠️ KHÔNG nằm trong danh sách trust') if ip else '❓ không đọc được'
-    return (f"[LIVE] IP PUBLIC hiện tại: {ip or '-'} ({st})\nDanh sách IP đã trust ({len(tl)}):\n"
+    st = ('✅ nằm trong danh sách tin cậy' if ip in tl else '⚠️ KHÔNG nằm trong danh sách tin cậy') if ip else '❓ không đọc được'
+    return (f"[LIVE] IP công khai hiện tại: {ip or '-'} ({st})\nDanh sách IP tin cậy ({len(tl)}):\n"
             + ('\n'.join(f"• {x}" for x in tl) if tl else '• (trống)')
             + "\n\nThêm: /trustip <ip> rồi /confirm trong 2 phút. Xoá: /untrustip <ip> rồi /confirm.")
 def ip_request(op, ip):
     ip = (ip or '').strip(); tl = trusted_ips()
     if not valid_ipv4(ip): return f"[LIVE] IP không hợp lệ: '{ip}'. Ví dụ: /{op}ip 1.2.3.4"
-    if op == 'trust' and ip in tl: return f"[LIVE] {ip} đã có trong danh sách trust."
-    if op == 'untrust' and ip not in tl: return f"[LIVE] {ip} không có trong danh sách trust."
+    if op == 'trust' and ip in tl: return f"[LIVE] {ip} đã có trong danh sách tin cậy."
+    if op == 'untrust' and ip not in tl: return f"[LIVE] {ip} không có trong danh sách tin cậy."
     json.dump({'op': op, 'ip': ip, 'ts': time.time()}, open(PEND_F, 'w', encoding='utf-8'))
     act = 'THÊM' if op == 'trust' else 'XOÁ'
-    note = '\nChỉ thêm sau khi anh ĐÃ whitelist IP này trên Binance (API Management → Edit restrictions).' if op == 'trust' else ''
-    return f"[LIVE] Xác nhận {act} IP {ip} {'vào' if op=='trust' else 'khỏi'} danh sách trust?{note}\nGõ /confirm trong 2 phút để xác nhận, /cancel để huỷ."
+    note = '\nChỉ thêm sau khi anh ĐÃ cho phép IP này trên sàn (mục quản lý API).' if op == 'trust' else ''
+    return f"[LIVE] Xác nhận {act} IP {ip} {'vào' if op=='trust' else 'khỏi'} danh sách tin cậy?{note}\nGõ /confirm trong 2 phút để xác nhận, /cancel để huỷ."
 def ip_confirm(cancel=False):
     try: p = json.load(open(PEND_F, encoding='utf-8'))
     except Exception: p = None
     try: os.remove(PEND_F)
     except Exception: pass
     if not p: return '[LIVE] Không có yêu cầu nào đang chờ xác nhận.'
-    if cancel: return f"[LIVE] Đã huỷ yêu cầu {p['op']} {p['ip']}."
+    if cancel: return f"[LIVE] Đã huỷ yêu cầu {'thêm' if p['op']=='trust' else 'xóa'} {p['ip']}."
     if time.time() - p.get('ts', 0) > 120: return '[LIVE] Yêu cầu đã quá 2 phút, hết hạn. Gõ lại /trustip hoặc /untrustip.'
     tl = trusted_ips()
     if p['op'] == 'trust' and p['ip'] not in tl: tl.append(p['ip'])

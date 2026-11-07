@@ -82,3 +82,19 @@ The approved migration installer is install_unified_service.ps1. Copy only this 
 
 Resume clarification: manual dashboard.py is permitted and is NOT a duplicate managed child. Installer duplicate checks cover only Trade/Telegram/Monitor. -ResumeAfterOwnerFlatConfirmation may be used ONLY after the specific unmanaged-child preflight abort, with old services stopped, migration hold present, no managed children, and explicit owner confirmation that exchange positions/orders are empty after the stop. It does not bypass KILL or automatically release Trade hold.
 
+
+
+## Vietnamese command presentation (2026-11-07; source only)
+Owner approved DISPLAY ONLY; absolutely no buy/sell strategy or execution changes.
+Candidate runtime copy list for this change ONLY: reporting.py, mon_common.py,
+tg_live_poller.py. Do not copy tests, this document or any config/state/history.
+No deployment/restart/push is implied by this source change. Require separate approval.
+/summary separates retained-window event counts from the latest saved observations.
+It shows BTC direction gates and available changes, ASTER band distances, ranking,
+and explicitly unknown gates (MA20, short path validation, BTC volatility, execution).
+It does not call/import the strategy or exchange, recompute executable signals,
+assert a future entry, or present recorded stop levels as verified resting orders.
+For open positions use only the configured live branch when available, not paper.
+15m exit has no fixed price target; do not invent threshold dollars from stale labels.
+Raw recorded reasons/logs retain their original technical wording as evidence.
+Verify offline fixtures and source_guard; validate Telegram only after approved activation.

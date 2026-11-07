@@ -56,10 +56,10 @@ class SnapshotTests(unittest.TestCase):
             close(handle)
         self.assertTrue(S.write_snapshot(self.path,{'new':6}))
     def test_decision_status_is_not_fill_prediction(self):
-        self.path.write_text(json.dumps({'watch':{'ASTER':{'price':.67925,'lo':.67567,'up':.71416}},'btc':{'allow':True},'updated':'2026-11-07 14:29:35'}),encoding='utf-8')
+        self.path.write_text(json.dumps({'live':{'exchange_positions':{}},'watch':{'ASTER':{'price':.67925,'lo':.67567,'up':.71416}},'btc':{'allow':True},'updated':'2026-11-07 14:29:35'}),encoding='utf-8')
         text=R.decision_text(self.root)
-        self.assertIn('cho cham dai duoi',text)
-        self.assertIn('KHONG phai du dieu kien vao',text)
-        self.assertIn('khong du doan',text)
+        self.assertIn('Mua: chờ giá ≤',text)
+        self.assertIn('Chạm dải không đồng nghĩa sẽ vào lệnh',text)
+        self.assertIn('Chưa xác minh đủ',text)
 
 if __name__=='__main__':unittest.main(verbosity=2)
