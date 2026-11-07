@@ -132,20 +132,21 @@ def status_text():
     age = (now-lp['ts']).total_seconds() if lp and lp['ts'] else None
     fresh = age is not None and 0 <= age < c['stale_loop_s']
     alive = fresh and launcher == 'Running' and n is not None and n == 1
-    state = 'DANG HOAT DONG' if alive else ('CHUA XAC MINH SERVICE' if launcher is None else 'BAT THUONG')
-    out = [f'[LIVE] STATUS {now:%d/%m/%Y %H:%M:%S} UTC+7', f'Bot: {state}',
-           f'Launcher BaseAsterTrade (task chi fallback): {launcher} | Python bot: {n}',
-           f'Heartbeat: {lp["ts"] if lp else "?"} | age={int(age) if age is not None else "?"}s']
+    state = 'ĐANG HOẠT ĐỘNG' if alive else ('CHƯA XÁC MINH DỊCH VỤ' if launcher is None else 'BẤT THƯỜNG')
+    out = [f'[LIVE] TRẠNG THÁI {now:%H:%M:%S %d/%m} (UTC+7)', f'Bot: {state}']
+    service = {'Running': 'đang chạy', 'Stopped': 'đã dừng'}.get(launcher, 'chưa xác minh')
+    out.append(f'Dịch vụ: {service} | Tiến trình: {n if n is not None else "chưa rõ"}')
+    out.append(f'Cập nhật: {int(age)} giây trước' if age is not None and age >= 0 else 'Cập nhật: chưa xác minh')
     if lp:
-        out += [f'Sync={lp["sync_ok"]} | Halted={lp["halted"]}',
-                f'Equity={_eq(lp["equity"])} | Vi the={lp["pos"]}']
-    from reporting import decision_text
-    out.append(decision_text(DIR))
+        sync = {'True': 'ổn', 'False': 'lỗi'}.get(str(lp['sync_ok']), 'chưa rõ')
+        halted = lp['halted']
+        halt = 'không' if halted is None or str(halted) == 'None' else 'có (xem /log)'
+        out += [f'Đồng bộ: {sync} | Tạm dừng: {halt}',
+                f'Tài sản: {_eq(lp["equity"])} | Vị thế: {"không" if str(lp["pos"]) == "[]" else lp["pos"]}']
     errs = last_errors(1)
     if errs:
         match = TS_RE.search(errs[0])
-        out.append('Su co gan nhat trong LICH SU: ' + (match.group(1) if match else 'xem /log') + '; xem heartbeat/Sync hien tai de xac dinh phuc hoi.')
-    out.append('Service Running khong dong nghia giao dich binh thuong; xem Sync/Halted va heartbeat.')
+        out.append('Sự cố gần nhất (lịch sử): ' + (match.group(1) if match else 'chưa rõ giờ') + ' · /log')
     return '\n'.join(out)
 
 def last_errors(n=8):

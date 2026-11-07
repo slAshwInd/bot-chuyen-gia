@@ -80,7 +80,7 @@ class ReportingTests(unittest.TestCase):
     def test_multiple_bot_processes_are_abnormal(self):
         lp={'ts':dt.datetime.now(),'sync_ok':'True','halted':'None','equity':1100,'pos':'[]'}
         with patch.object(M,'last_loop',return_value=lp),patch.object(M,'proc_task',return_value=('Running',2)),patch.object(M,'cfg',return_value={'stale_loop_s':120}):
-            self.assertIn('BAT THUONG',M.status_text())
+            self.assertIn('BẤT THƯỜNG',M.status_text())
     def test_null_command_line_can_use_service_descendant(self):
         class Result:
             stdout='Running|1\n'; returncode=0
@@ -108,7 +108,25 @@ class ReportingTests(unittest.TestCase):
     def test_status_stale_even_if_service_running(self):
         lp={'ts':dt.datetime.now()-dt.timedelta(minutes=10),'sync_ok':'True','halted':'None','equity':1100,'pos':'[]'}
         with patch.object(M,'last_loop',return_value=lp),patch.object(M,'proc_task',return_value=('Running',1)),patch.object(M,'cfg',return_value={'stale_loop_s':120}):
-            self.assertIn('BAT THUONG',M.status_text())
+            self.assertIn('BẤT THƯỜNG',M.status_text())
+    def test_status_concise_vietnamese(self):
+        lp={'ts':dt.datetime.now(),'sync_ok':'True','halted':'None','equity':2200,'pos':'[]'}
+        with patch.object(M,'last_loop',return_value=lp),patch.object(M,'proc_task',return_value=('Running',1)),patch.object(M,'cfg',return_value={'stale_loop_s':120}),patch.object(M,'last_errors',return_value=['2026-11-07 14:20:18 restarting in 30s']):
+            text=M.status_text()
+        self.assertIn('ĐANG HOẠT ĐỘNG',text)
+        self.assertIn('Đồng bộ: ổn | Tạm dừng: không',text)
+        self.assertIn('Vị thế: không',text)
+        self.assertIn('Sự cố gần nhất (lịch sử): 2026-11-07 14:20:18 · /log',text)
+        self.assertNotIn('halted=None',text)
+        self.assertNotIn('snapshot',text)
+        self.assertLessEqual(len(text.splitlines()),7)
+        self.assertLess(len(text),450)
+    def test_status_missing_and_halted(self):
+        with patch.object(M,'last_loop',return_value=None),patch.object(M,'proc_task',return_value=(None,None)),patch.object(M,'cfg',return_value={'stale_loop_s':120}),patch.object(M,'last_errors',return_value=[]):
+            self.assertIn('CHƯA XÁC MINH DỊCH VỤ',M.status_text())
+        lp={'ts':dt.datetime.now(),'sync_ok':'False','halted':'RISK_GATE','equity':2200,'pos':'[ASTER]'}
+        with patch.object(M,'last_loop',return_value=lp),patch.object(M,'proc_task',return_value=('Running',1)),patch.object(M,'cfg',return_value={'stale_loop_s':120}),patch.object(M,'last_errors',return_value=[]):
+            self.assertIn('Đồng bộ: lỗi | Tạm dừng: có (xem /log)',M.status_text())
     def test_120m_schedule_and_restart(self):
         start=dt.datetime(2026,11,7,12)
         state={'next_sum':'legacy'}
