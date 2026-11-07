@@ -37,3 +37,41 @@ run_bnb.ps1 still invokes rescale_config.py at startup. That script can recreate
 config_live.json was tracked in old Git commits. It is removed from the new source-only tree only; existing history remains unchanged. No history purge or credential exposure assessment is claimed.
 
 Snapshot durability: a unique same-directory temp file is flushed/closed before replacement. Transient Windows sharing/access errors receive bounded retry. If the non-authoritative reporting snapshot still cannot be written, the old snapshot remains and a diagnostic is logged; the trading loop continues. This does not suppress failures of authoritative order journals/books. No claim is made that all filesystem/process failures are eliminated.
+
+## Monitor-only service activation
+After explicit owner approval, copy ONLY install_monitor_service.ps1 to runtime and run elevated there. Never execute from upcode. It disables only the idle legacy HLBot_Monitor task, refuses duplicate monitor processes, installs/starts only BaseAsterMonitor, and sets AppNoConsole=1 on the four BaseAster services. No Trade/Telegram/Dashboard restart. Existing processes may require a separately approved restart before new console settings apply. Service runs non-interactively in Session 0, with redirected output. Do not enable interactive desktop.
+Prefer four isolated services. A future single service must supervise children independently, preserve shutdown/order state, prevent duplicates and avoid restarting Trade when reporting fails. Consolidation is NOT part of this activation.
+
+
+## Unified service (source prepared; activation requires fresh safety checks)
+Owner requested one service, no automatic Dashboard, no visible console.
+Use BaseAsterTrade as host name to preserve existing shortcuts/status. New
+service_supervisor.py launches Trade, Telegram, Monitor independently with
+CREATE_NO_WINDOW, redirected logs and per-child restart backoff. Configure NSSM
+AppNoConsole=1, AppKillProcessTree=1 and automatic host recovery. Preserve existing
+NSSM environment entries; never export credential values or replace the environment.
+Do NOT use run_bnb.ps1 for this host: it regenerates live config. New host passes
+existing config unchanged to bnb_bot.py, keeps ALLOW_PC_RUN/KILL gates and does not
+send order commands. KILL handling remains owned by existing trading code.
+No stale-snapshot watchdog termination: a locked snapshot is not proof Trade hung.
+A Service stop is NOT an emergency flatten; use the existing emergency control for
+that separately. Host/process Running is not proof API sync or valid stop protection.
+
+Migration must NOT be inferred from this source commit. Before activation, obtain
+Administrator elevation, check current account flat/no pending orders, prevent legacy
+launchers from duplicating children, stop old services in a separately approved
+window, and verify account flat again after stopping. A pre-stop LOOP alone is not
+authoritative proof of flat after stop (entry race). If verification cannot be done,
+leave the old services unchanged and do not claim successful migration.
+Disable legacy automatic Telegram/Monitor/Dashboard services and HLBot tasks only
+as part of completed migration; never leave two launch owners. Keep Dashboard
+manual: .venv\Scripts\python.exe dashboard.py --plain.
+Verify fresh host heartbeat, exactly one application leaf for each of three children,
+fresh Trade LOOP Sync=True, fresh Monitor heartbeat and persisted next_sum. Wait for
+one real report before claiming Telegram delivery. No live trade crash-injection test.
+
+Deploy only separately approved changed files: service_supervisor.py, mon_common.py
+(and a separately reviewed migration installer if supplied). Do not copy tests/docs,
+config/state/history or whole directories. Keep this section over old four-service
+installation instructions: legacy full installer would restore four services and
+must not be run after consolidation. Unified activation is NOT YET VERIFIED.

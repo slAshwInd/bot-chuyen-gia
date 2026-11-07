@@ -4,6 +4,11 @@ $dir = $PSScriptRoot
 $nssm = (Get-Command nssm.exe -ErrorAction Stop).Source
 $python = Join-Path $dir '.venv\Scripts\python.exe'
 $powershell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+# Do not silently undo the unified-service configuration.
+if ((Get-Service BaseAsterTrade -ErrorAction SilentlyContinue) -and
+    ((& $nssm get BaseAsterTrade AppParameters) -match 'service_supervisor.py')) {
+    throw 'Unified host configured. Legacy four-service installer is forbidden; review SAFE_UPDATE.md.'
+}
 $services = @(
     @{Name='BaseAsterTrade'; App=$powershell; Args="-NoProfile -ExecutionPolicy Bypass -File `"$dir\run_bnb.ps1`""},
     @{Name='BaseAsterTelegram'; App=$powershell; Args="-NoProfile -ExecutionPolicy Bypass -File `"$dir\run_tg_poller.ps1`""},
@@ -36,6 +41,7 @@ try {
         NssmCommand -Arguments @('set', $s.Name, 'AppExit', 'Default', 'Restart')
         NssmCommand -Arguments @('set', $s.Name, 'AppRestartDelay', '15000')
         NssmCommand -Arguments @('set', $s.Name, 'AppKillProcessTree', '1')
+        NssmCommand -Arguments @('set', $s.Name, 'AppNoConsole', '1')
         NssmCommand -Arguments @('set', $s.Name, 'AppEnvironmentExtra', 'PYTHONUTF8=1', 'PYTHONIOENCODING=utf-8')
         NssmCommand -Arguments @('set', $s.Name, 'AppStdout', "$dir\logs\$($s.Name).log")
         NssmCommand -Arguments @('set', $s.Name, 'AppStderr', "$dir\logs\$($s.Name).error.log")

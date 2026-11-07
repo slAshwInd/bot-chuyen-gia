@@ -67,7 +67,7 @@ def proc_task():
           "$ch=@($all | Where-Object {$_.ParentProcessId -in $ids -and $_.ProcessId -notin $ids} | ForEach-Object {$_.ProcessId});"
           "$ids+= $ch}while($ch.Count -gt 0)};$state=[string]$s.Status}"
           "else{$state=[string](Get-ScheduledTask -TaskName 'HLBot BNB X5' -ErrorAction SilentlyContinue).State};"
-          "$py=@($all | Where-Object {$_.Name -match '^python(w)?\\.exe$' -and "
+          "$py=@($all | Where-Object {$_.Name -match '^python(w)?\\.exe$' -and $_.CommandLine -and $_.CommandLine -match '\\bbnb_bot\\.py\\b' -and "
           "($_.ProcessId -in $ids -or ($_.CommandLine -and $_.CommandLine -match '\\bbnb_bot\\.py\\b' -and $_.CommandLine.Contains('%s')))});$n=@($py | Where-Object {$_.ProcessId -notin $py.ParentProcessId}).Count;"
           "Write-Output \"$state|$n\"") % root
     try:

@@ -63,3 +63,5 @@ verify_services_bnb.ps1
 winutf8.py
 snapshot_io.py
 test_snapshot_io.py
+service_supervisor.py
+test_service_supervisor.py
