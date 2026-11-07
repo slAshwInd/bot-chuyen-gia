@@ -98,3 +98,14 @@ For open positions use only the configured live branch when available, not paper
 15m exit has no fixed price target; do not invent threshold dollars from stale labels.
 Raw recorded reasons/logs retain their original technical wording as evidence.
 Verify offline fixtures and source_guard; validate Telegram only after approved activation.
+
+
+## Compact summaries and Python presentation reload (2026-11-07)
+- Default scheduled summaries and /summary are compact. /summary detail or /summary 15 detail retains indicators and unknown gates. No signal, sizing, order or strategy changes.
+- Current snapshot freshness uses report-render time, NOT a historical window end. Historical counts remain [start,end). Entry counts are recorded events, not exchange fill confirmation.
+- mon_common.py holds a ReportLoader for reporting.py ONLY. At the next summary request it hashes/compiles source into an isolated module, renders once, validates the return interface and only then promotes. Syntax/import/render errors keep the last successful in-process module and add a warning; diagnostics contain exception type only. This is not sandboxing; only reviewed source may be deployed.
+- Bootstrap deployment files: report_reload.py, reporting.py, mon_common.py, tg_live_poller.py. Initially reload Telegram and Monitor children only under the existing supervisor; do NOT restart Trade, reinstall/reconfigure Service or run legacy installers. Verify identities/descendants before stopping a child. Preserve monitor schedule/outbox and Telegram offset files; never reset them.
+- Subsequent report-format-only updates: test and review reporting.py, copy ONLY this file using a same-directory temporary source file and os.replace. No service restart or UAC service control is needed provided runtime file ACLs allow source replacement. Next /summary or scheduled report picks it up. Auto-reload does NOT mean auto-download from GitHub or bypass tests/approval.
+- Edits to report_reload.py, mon_common.py, tg_live_poller.py or monitor_bnb.py still need explicit child reload approval. Engine/strategy/supervisor updates are outside this presentation loader and require a separate reviewed plan; NEVER hot-reload them.
+- Do not deploy tests/docs/allowlist/config examples. Never read/copy secrets or their backups. Never mirror runtime directories; config, account data, state, pending closes, order history, logs, flags and cursors are excluded. Before push, inspect tracked and staged paths/blobs, outgoing commits, exact diff and run source_guard.py. Historical sensitive commits are not sanitized by a new commit.
+- Good-module fallback is in-process, not persistent rollback across process restarts. A first-ever invalid load returns an unavailable report; Trade continues. Do not claim Telegram receipt from outbox emptiness.

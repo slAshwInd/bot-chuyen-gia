@@ -115,11 +115,14 @@ def act_line(e):
     ev = e.get('event'); tm = str(e.get('time', ''))[11:16]
     px = e.get('price'); rs = str(e.get('reason') or '')[:120]
     return f"• {tm} {ev} {e.get('side') or ''} {e.get('coin') or ''}" + (f" @ {px}" if px not in (None, '', 0) else '') + (f" — {rs}" if rs and ev.endswith(('BLOCKED_RULES','BLOCKED_BTC','VETO','FAILED')) else '')
-def summary_text(minutes=120, title='PHIEN', t0=None, t1=None):
-    from reporting import summary
+from report_reload import ReportLoader
+_REPORT_LOADER = ReportLoader(P('reporting.py'))
+print('REPORT_RELOAD_READY reporting.py only; Trade unchanged', flush=True)
+
+def summary_text(minutes=120, title='PHIEN', t0=None, t1=None, detail=False):
     t1 = t1 or dt.datetime.now()
     t0 = t0 or t1 - dt.timedelta(minutes=minutes)
-    return summary(DIR, t0, t1, parse_loop, classify)
+    return _REPORT_LOADER.summary(DIR, t0, t1, parse_loop, classify, detail=detail)
 
 def session_line(t0, t1):
     r = window(t0, t1); lp = r['last'] or {}
@@ -162,12 +165,12 @@ def log_text(n=8):
 HELP = ("[LIVE] Lệnh báo cáo và quản lý IP (không đặt lệnh giao dịch):\n"
         "/status – trạng thái dịch vụ và vị thế, ngắn gọn\n"
         "/pnl – vốn nạp, số dư, lãi/lỗ\n/action – các hành động gần nhất (vào/thoát/chặn)\n"
-        "/summary – tổng hợp 60 phút và điều kiện hiện tại (gõ /summary 15 để chọn số phút)\n"
+        "/summary – tổng hợp ngắn 60 phút; /summary 15 chọn số phút; /summary detail xem chi tiết\n"
         "/log – các lỗi gần nhất trong log\n"
         "/ip – IP hiện tại + danh sách IP tin cậy\n/trustip <ip> – thêm IP tin cậy (cần /confirm)\n"
         "/untrustip <ip> – xoá IP tin cậy (cần /confirm)\n/confirm, /cancel – xác nhận / huỷ\n/help – danh sách lệnh")
 COMMANDS = [('status', 'Bot có đang chạy không + trạng thái'), ('pnl', 'Vốn nạp, số dư, lãi/lỗ'),
-            ('action', 'Hành động gần nhất'), ('summary', 'Tổng hợp và mốc xử lý tiếp theo'),
+            ('action', 'Hành động gần nhất'), ('summary', 'Tổng hợp ngắn; /summary detail xem chi tiết'),
             ('log', 'Lỗi gần nhất trong log'), ('ip', 'IP hiện tại + danh sách tin cậy'),
             ('trustip', 'Thêm IP tin cậy: /trustip 1.2.3.4'), ('untrustip', 'Xoá IP tin cậy'),
             ('confirm', 'Xác nhận thay đổi IP'), ('cancel', 'Huỷ thay đổi IP'), ('help', 'Danh sách lệnh')]

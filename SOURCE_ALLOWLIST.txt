@@ -66,3 +66,5 @@ test_snapshot_io.py
 service_supervisor.py
 test_service_supervisor.py
 install_unified_service.ps1
+report_reload.py
+test_report_reload.py

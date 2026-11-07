@@ -111,7 +111,7 @@ def lines(path):
         return
 
 
-def summary(root, t0, t1, parse_loop, classify):
+def summary(root, t0, t1, parse_loop, classify, detail=False):
     """Stream ALL retained records: no tail-byte approximation, no trading writes.
     LOOP = completed decision/scan cycle, NOT a shortlist refresh or API call.
     Entry counts are logged events, not independently verified exchange fills.
@@ -182,14 +182,15 @@ def summary(root, t0, t1, parse_loop, classify):
     reasons = '; '.join(f'{labels.get(k,k)}: {v}' for k,v in blocked.most_common(5))
     state = 'có nhịp cập nhật' if lp and (t1-lp['ts']).total_seconds() < 120 else 'thiếu nhịp cập nhật hoặc dữ liệu cũ'
     out = [f'[LIVE] TỔNG HỢP {t0:%d/%m %H:%M}-{t1:%d/%m %H:%M} UTC+7',
-           f'Bot: {state} | Vòng quét: {len(loops)} | Lượt lọc danh sách: {shortlist_scans}',
-           f'Lần vào lệnh ghi nhận: {len(entries)} | Vòng không ghi nhận vào lệnh (ước tính): {no_entry}',
-           f'Chặn/bỏ qua ghi nhận: {sum(blocked.values())}',
-           'Lý do: ' + (reasons or 'không có lý do được ghi; không suy đoán.'),
-           'Theo nhật ký còn lưu; sự kiện không phải xác nhận khớp trên sàn.']
+           f'Trong kỳ: {state} | {len(loops)} vòng quét | {len(entries)} lần vào lệnh ghi nhận.']
+    if blocked: out.append('Chặn/bỏ qua trong kỳ: '+reasons)
+    if detail:
+        out.extend([f'Lượt lọc danh sách: {shortlist_scans} | Vòng không vào (ước tính): {no_entry}',
+                    'Lý do: '+(reasons or 'không có lý do được ghi; không suy đoán.')])
     if errs:
         out.append('Lỗi: ' + ', '.join(f'{dict(auth="xác thực",api="kết nối API",exit="tiến trình dừng",exc="ngoại lệ").get(k,k)}={v}' for k,v in errs.items()))
-    out.append(decision_text(root, now=t1))
+    out.append(decision_text(root) if detail else decision_brief(root))
+    out.append("Theo nhật ký/dữ liệu lưu, chưa đối soát khớp sàn. Chi tiết: /summary detail.")
     text = '\n'.join(out)
     if len(text)>3800: text=text[:3650]+'\nĐã rút gọn. Mốc chỉ tham khảo theo dữ liệu lưu; chưa xác minh đủ điều kiện/khớp lệnh.'
     return text, {'loops':len(loops), 'entries':len(entries), 'no_entry':no_entry,
@@ -301,6 +302,56 @@ def decision_text(root, now=None):
                 if k.split('|')[0]==coin and isinstance(f,dict): out.append('Bộ lọc ghi nhận: '+str(f.get('why') or 'chưa rõ')[:160])
         if not watch: out.append('Thiếu giá/dải ASTER; không suy đoán mốc vào.')
         out.append('Chưa xác minh đủ MA20, cổng bán, vốn/ký quỹ và điều kiện thực thi. Chạm dải không đồng nghĩa sẽ vào lệnh; mốc thay đổi theo nến.')
+    return '\n'.join(out)
+
+
+def decision_brief(root, now=None):
+    """Read-only explanation, not a new signal or execution eligibility test."""
+    st=read_json(Path(root)/'state_live.json')
+    if not st: return 'Hiện tại: thiếu dữ liệu; chưa xác minh lý do chưa vào lệnh.'
+    now=now or dt.datetime.now()
+    stamp=str(st.get('updated','?'))[:19]
+    try: fresh=0 <= (now-dt.datetime.strptime(stamp,'%Y-%m-%d %H:%M:%S')).total_seconds() < 120
+    except (ValueError,TypeError): fresh=False
+    out=[f'Hiện tại — dữ liệu {stamp} (UTC+7)'+(':' if fresh else ' — CŨ/CHƯA XÁC MINH:')]
+    lv=st.get('live') or {}
+    if lv.get('sync_ok') not in (True,'True'): out.append('Đồng bộ chưa xác minh; xem /status.')
+    if lv.get('halted') not in (None,'None'): out.append('Bot tạm dừng; xem /status và /log.')
+    exchange=lv.get('exchange_positions')
+    if not isinstance(exchange,dict):
+        out.append('Vị thế sàn chưa xác minh; không mặc định là rỗng.')
+    elif exchange:
+        cfg=read_json(Path(root)/'config_live.json')
+        active=(cfg.get('live') or {}).get('branch')
+        branch=(st.get('branches') or {}).get(active) or {}
+        for coin,ep in list(exchange.items())[:3]:
+            if not isinstance(ep,dict): continue
+            qty=number(ep.get('szi'))
+            side='Bán' if qty is not None and qty<0 else 'Mua' if qty is not None else '?'
+            p=(branch.get('positions') or {}).get(coin) or {}
+            out.append(f'{coin} {side} | Giá vào {ep.get("entryPx","?")} | Bảo vệ {p.get("stop_px") or "chưa rõ"} | Khóa lãi {p.get("trail") or "chưa ghi nhận"}.')
+            rule=str(branch.get('exit_rule') or '')
+            if p and ('15m' in rule or '15 phút' in rule):
+                mid=(cfg.get('exit_hold_mid4h') or {}).get('enabled') and not p.get('mid4h_hit')
+                mark=((st.get('watch') or {}).get(coin) or {}).get('mid','?')
+                out.append(f'Tiếp theo: chờ chạm dải giữa 4h {mark}, rồi xét chốt theo nến 15 phút.' if mid else 'Tiếp theo: xét chốt theo nến 15 phút và cổng lãi; không có giá chốt cố định.')
+            else: out.append('Mốc xử lý tiếp theo chưa xác minh; /summary detail.')
+        out.append('Mức bảo vệ theo dữ liệu lưu, chưa xác minh lệnh chờ sàn.')
+    else:
+        btc=st.get('btc') or {}; r=st.get('btc_recheck') or {}
+        blocked=[]
+        for allow,block,label in [('allow','block','mua'),('allow_s','block_s','bán')]:
+            if btc.get(allow) in (False,'False') or r.get(block) in (True,'True'): blocked.append(label)
+        btc_text='BTC chặn '+ '/'.join(blocked) if blocked else 'BTC chưa ghi nhận chặn ngắn hạn' if r.get('block') in (False,'False') and r.get('block_s') in (False,'False') else 'BTC chưa đủ dữ liệu xác minh'
+        w=(st.get('watch') or {}).get('ASTER') or {}
+        tr=(st.get('trend1h') or {}).get('ASTER') or {}
+        px=number(w.get('price')); lo=number(tr.get('lo1h') if tr else w.get('lo')); up=number(tr.get('up1h') if tr else w.get('up'))
+        wait=[]
+        if px is not None and lo is not None and lo>0 and px>lo: wait.append(f'mua ≤ {lo:.6g}')
+        if px is not None and up is not None and up>0 and px<up: wait.append(f'bán hồi ≥ {up:.6g}')
+        aster='ASTER chờ vùng '+ ' / '.join(wait) if wait else 'ASTER: giá/dải chưa đủ hoặc đã chạm; chưa xác minh bộ điều kiện'
+        out.append('Chưa vào lệnh theo dữ liệu lưu: '+aster+'. '+btc_text+'.')
+        out.append('Các điều kiện khác/nhánh bán phá vỡ chưa xác minh; chạm mốc không đảm bảo vào lệnh.')
     return '\n'.join(out)
 
 

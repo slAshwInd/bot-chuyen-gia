@@ -61,7 +61,7 @@ class ReportingTests(unittest.TestCase):
         self.assertLess(len(text),1801)
     def test_empty_window_does_not_invent_reason(self):
         t=dt.datetime(2026,11,7)
-        text,r=R.summary(self.root,t,t+dt.timedelta(hours=2),M.parse_loop,M.classify)
+        text,r=R.summary(self.root,t,t+dt.timedelta(hours=2),M.parse_loop,M.classify,detail=True)
         self.assertEqual(r['loops'],0)
         self.assertIn('không có lý do được ghi',text)
     def test_service_authoritative_query(self):
@@ -210,5 +210,56 @@ class ReportingTests(unittest.TestCase):
             self.assertNotIn('\ufffd',description)
         for file in ['reporting.py','mon_common.py','tg_live_poller.py']:
             self.assertNotIn('\ufffd',Path(R.__file__).with_name(file).read_text(encoding='utf-8'))
+
+class BriefTests(unittest.TestCase):
+    setUp=ReportingTests.setUp
+    write=ReportingTests.write
+    current=ReportingTests.current
+    def test_brief_is_short_and_uncertain(self):
+        self.current(btc={'allow':True,'allow_s':True},btc_recheck={'block':False,'block_s':False})
+        text=R.decision_brief(self.root,dt.datetime(2026,11,7,15,30,30))
+        for x in ['mua ≤ 9','bán hồi ≥ 12','BTC chưa ghi nhận chặn ngắn hạn','không đảm bảo vào lệnh']:
+            self.assertIn(x,text)
+        self.assertNotIn('MA20',text)
+        self.assertNotIn('CŨ/CHƯA XÁC MINH',text)
+        self.assertLess(len(text),650)
+    def test_brief_btc_blocks_and_unknown_exchange(self):
+        self.current()
+        self.assertIn('BTC chặn bán',R.decision_brief(self.root))
+        self.current(live={})
+        self.assertNotIn('Chưa vào lệnh',R.decision_brief(self.root))
+        self.assertIn('không mặc định là rỗng',R.decision_brief(self.root))
+    def test_brief_h1_missing_and_touched(self):
+        self.current(trend1h={'ASTER':{'lo1h':8,'up1h':13}})
+        self.assertIn('mua ≤ 8',R.decision_brief(self.root))
+        self.current(watch={})
+        self.assertIn('chưa đủ',R.decision_brief(self.root))
+        self.current(watch={'ASTER':{'price':8,'lo':9,'up':12}})
+        self.assertNotIn('mua ≤ 9',R.decision_brief(self.root))
+    def test_compact_and_detail_keep_identical_metrics(self):
+        self.current()
+        t=dt.datetime(2026,11,7,15,31)
+        a,sa=R.summary(self.root,t-dt.timedelta(hours=1),t,M.parse_loop,M.classify)
+        b,sb=R.summary(self.root,t-dt.timedelta(hours=1),t,M.parse_loop,M.classify,detail=True)
+        self.assertEqual(sa,sb);self.assertLess(len(a),1000);self.assertGreater(len(b),len(a))
+        self.assertIn('/summary detail',a)
+    def test_freshness_is_not_historical_window_end(self):
+        self.current()
+        t=dt.datetime(2026,11,7,15,29)
+        with patch.object(R,'decision_brief',return_value='brief') as brief:
+            R.summary(self.root,t-dt.timedelta(hours=1),t,M.parse_loop,M.classify)
+            brief.assert_called_once_with(self.root)
+    def test_brief_active_position_never_paper(self):
+        self.current(live={'exchange_positions':{'ASTER':{'szi':1,'entryPx':10}}},branches={'LIVE':{'positions':{'ASTER':{'stop_px':9,'trail':9.5}},'exit_rule':'15m'},'PAPER':{'positions':{'ASTER':{'stop_px':999}},'exit_rule':'15m'}})
+        self.write('config_live.json',{'live':{'branch':'LIVE'}})
+        text=R.decision_brief(self.root)
+        self.assertIn('Bảo vệ 9',text);self.assertNotIn('999',text);self.assertIn('nến 15 phút',text)
+    def test_brief_stale_missing_halted_no_writes(self):
+        self.assertIn('thiếu dữ liệu',R.decision_brief(self.root))
+        self.current(live={'sync_ok':False,'halted':'RISK','exchange_positions':{}})
+        before={p.name:p.read_bytes() for p in self.root.iterdir()}
+        text=R.decision_brief(self.root,dt.datetime(2026,11,7,16))
+        self.assertIn('CŨ/CHƯA XÁC MINH',text);self.assertIn('tạm dừng',text)
+        self.assertEqual(before,{p.name:p.read_bytes() for p in self.root.iterdir()})
 
 if __name__=='__main__': unittest.main(verbosity=2)

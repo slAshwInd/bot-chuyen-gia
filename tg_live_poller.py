@@ -124,7 +124,7 @@ def main():
                 elif c=='status': t._send_direct(MC.status_text())
                 elif c=='summary':
                     a=(m.get('text') or '').split(); mn=int(a[1]) if len(a)>1 and a[1].isdigit() else 60
-                    t._send_direct(MC.summary_text(max(1,min(mn,1440)))[0])
+                    t._send_direct(MC.summary_text(max(1,min(mn,1440)), detail='detail' in [x.lower() for x in a[1:]])[0])
                 elif c=='log': t._send_direct(MC.log_text())
                 elif c=='ip': t._send_direct(MC.ip_text())
                 elif c in ('trustip','untrustip'):

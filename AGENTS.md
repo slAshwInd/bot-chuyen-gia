@@ -14,3 +14,5 @@
 Snapshot durability: a unique same-directory temp file is flushed/closed before replacement. Transient Windows sharing/access errors receive bounded retry. If the non-authoritative reporting snapshot still cannot be written, the old snapshot remains and a diagnostic is logged; the trading loop continues. This does not suppress failures of authoritative order journals/books. No claim is made that all filesystem/process failures are eliminated.
 
 Unified-service request: read latest SAFE_UPDATE.md section. Never run legacy full installer to undo consolidation. A pre-stop flat LOOP cannot prove post-stop account flat. Activation requires fresh checks/elevation; source commit alone is not activation. Dashboard must remain manual. Do not assume host Running proves three healthy children.
+
+Presentation reload: only reporting.py is hot-loaded, on the next summary. Follow SAFE_UPDATE.md exact source paths; no automatic GitHub pull, engine reload, state reset or service reinstallation. Bootstrap/reloader changes require approved Telegram/Monitor child reload; keep Trade running.
