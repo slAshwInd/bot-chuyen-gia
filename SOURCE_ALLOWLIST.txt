@@ -65,3 +65,4 @@ snapshot_io.py
 test_snapshot_io.py
 service_supervisor.py
 test_service_supervisor.py
+install_unified_service.ps1

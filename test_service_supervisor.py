@@ -18,6 +18,9 @@ class Tests(unittest.TestCase):
         self.h.tick(); self.assertEqual(set(self.h.procs),{'telegram','monitor'})
     def test_kill(self):
         self.enable(); (self.r/'KILL').touch(); self.h.tick(); self.assertNotIn('trade',self.h.procs)
+    def test_migration_hold(self):
+        self.enable(); (self.r/'SERVICE_MIGRATION_HOLD.flag').touch(); self.h.tick()
+        self.assertNotIn('trade',self.h.procs); self.assertEqual(set(self.h.procs),{'telegram','monitor'})
     def test_three(self):
         self.enable(); self.h.tick(); self.assertEqual(set(self.h.procs),set(S.NAMES))
         self.assertEqual(self.calls[0][1]['env']['BNB_DRY_RUN'],'0')

@@ -7,7 +7,7 @@ SCRIPTS=dict(trade='bnb_bot.py',telegram='tg_live_poller.py',monitor='monitor_bn
 DELAYS=dict(trade=30,telegram=15,monitor=15)
 LOGS=dict(trade='bot_live.log',telegram='tg_poller.log',monitor='logs/BaseAsterMonitor.log')
 def trade_allowed(root=ROOT):
-    return (root/'ALLOW_PC_RUN.flag').is_file() and not (root/'KILL').exists()
+    return (root/'ALLOW_PC_RUN.flag').is_file() and not (root/'KILL').exists() and not (root/'SERVICE_MIGRATION_HOLD.flag').exists()
 def hidden_flags(): return 0x08000000 if os.name=='nt' else 0
 def log(message):
     try:

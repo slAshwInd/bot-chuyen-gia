@@ -75,3 +75,7 @@ Deploy only separately approved changed files: service_supervisor.py, mon_common
 config/state/history or whole directories. Keep this section over old four-service
 installation instructions: legacy full installer would restore four services and
 must not be run after consolidation. Unified activation is NOT YET VERIFIED.
+
+## Staged activation gate
+The approved migration installer is install_unified_service.ps1. Copy only this script, service_supervisor.py and mon_common.py to runtime after checks. Run elevated in runtime. It starts the host with SERVICE_MIGRATION_HOLD.flag: Telegram and Monitor run, Trade does not. Owner MUST verify exchange positions/orders AFTER old Trade stops. Only after explicit owner confirmation remove that one hold file, then verify Trade fresh LOOP/Sync and monitor schedule. Never remove KILL or ALLOW gates automatically. Never copy the hold flag via Git. Host Running with Trade held is intentionally not healthy trading. Existing NSSM environment is not exported or overwritten. If install fails, inspect phase before any retry; do not auto-run old rescale launcher.
+
