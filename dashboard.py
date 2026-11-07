@@ -52,6 +52,11 @@ def nproc():
     if _np is not None:return _np
     try:
         c='(Get-CimInstance Win32_Process -Filter "Name like \'python%\'" | ?{$_.CommandLine -like \'*'+os.path.dirname(os.path.abspath(__file__))+'*bnb_bot.py*\'} | Measure-Object).Count'
+        # A desktop user cannot read SYSTEM process command lines; use the service PID file.
+        q=lambda p:"'"+p.replace("'","''")+"'"
+        c=("$pf="+q(B+'bot_bnb.pid')+"; if ((Get-Service BaseAsterTrade -ErrorAction SilentlyContinue).Status -eq 'Running') { "
+           "$bid=0; [int]::TryParse(((Get-Content -LiteralPath $pf -ErrorAction SilentlyContinue) -join ''),[ref]$bid) | Out-Null; "
+           "if ($bid -gt 0 -and (Get-Process -Id $bid -ErrorAction SilentlyContinue) -and -not (Test-Path -LiteralPath "+q(B+'KILL')+")) { 1 } else { 0 } } else { "+c+" }")
         r=subprocess.run(['powershell','-NoProfile','-Command',c],capture_output=True,text=True,timeout=15,creationflags=0x08000000)
         _np=int((r.stdout or '0').strip() or 0)
     except Exception:_np=-1

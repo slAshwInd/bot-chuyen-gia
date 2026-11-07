@@ -33,51 +33,6 @@ def s3():
         if pd_:return '\nBước 3: chờ nến gãy '+', '.join(f"{'SHORT' if x['side']=='S' else 'LONG'} (phát hiện {x['det_bar'][:16]}, {x['n']}/24 nến)" for x in pd_)
         return '\nBước 3: không có tín hiệu'
     except Exception: return '\nBước 3: chưa có trạng thái'
-# ---- /pnl v2 (Vien 04/11 t690u): Vốn / Số lệnh / PNL / Entry / PNL tạm tính
-START_CAPITAL=1000.0   # override via config_live.json 'start_capital' (Vien t691u)
-def _f(x,d=2):
-    try: return f"{float(x):,.{d}f}"
-    except Exception: return '?'
-def pnl():
-    try: st=json.load(open('state_live.json',encoding='utf-8'))
-    except Exception: return '[LIVE] Chưa đọc được state_live.json.'
-    lv=st.get('live') or {}; br=(st.get('branches') or {}).get('BASE_SL250') or next(iter((st.get('branches') or {}).values()),{})
-    eq=lv.get('equity', br.get('equity')); wallet=lv.get('usdc_total') or lv.get('base')
-    rows=[]
-    try:
-        import csv
-        with open('trades_live.csv',encoding='utf-8') as f: rows=list(csv.DictReader(f))
-    except Exception: pass
-    if rows:
-        nets=[float(r.get('net') or 0) for r in rows]; n=len(nets); w=sum(1 for x in nets if x>0); real=sum(nets)
-    else:
-        n=int(br.get('n_trades') or 0); w=int(br.get('n_wins') or 0); real=float(br.get('realized') or 0)
-    l=n-w
-    try: start=float(json.load(open('config_live.json',encoding='utf-8')).get('start_capital',START_CAPITAL))
-    except Exception: start=START_CAPITAL
-    out=['[LIVE] BÁO CÁO PNL', f"Cập nhật: {str(st.get('updated') or '')[:19]} (UTC+7)", '',
-         f"💰 Vốn: {_f(eq)} USDT"+(f" (ví {_f(wallet)})" if wallet is not None else ''),
-         f"📊 Số lệnh: {n} (thắng {w} / thua {l})"+(f" | từ {str(br.get('started'))[:10]}" if br.get('started') else ''),
-         f"🏦 Vốn đầu: {start:,.0f} USDT",
-         f"✅ PNL: {'+' if real>=0 else ''}{_f(real)} USDT"+(f" ({'+' if real>=0 else ''}{real/start*100:.2f}% so với vốn đầu)" if start else ''),
-         '', '📍 Entry:']
-    ex=lv.get('exchange_positions') or {}; bp=br.get('positions') or {}; lev=lv.get('leverage') or br.get('lev'); tu=0.0; tm=0.0
-    coins=list(dict.fromkeys(list(ex.keys())+list(bp.keys())))
-    if not coins: out.append('Không có lệnh')
-    for c in coins:
-        e=ex.get(c) or {}; b=bp.get(c) or {}
-        szi=e.get('szi'); side=b.get('side') or ('SHORT' if (szi or 0)<0 else 'LONG')
-        px=e.get('entryPx') or b.get('avg'); sz=abs(float(szi)) if szi is not None else None
-        notl=(sz*float(px)) if (sz and px) else b.get('notional'); mg=b.get('margin') or ((notl/float(lev)) if (notl and lev) else None)
-        u=e.get('upnl', b.get('unreal')); tu+=float(u or 0); tm+=float(mg or 0)
-        out.append(f"• {c} {side} @ {float(px):.6g}" if px else f"• {c} {side}")
-        out.append(f"  KL {_f(sz,0)} {c} ≈ {_f(notl)} USDT | Margin {_f(mg)} | x{_f(lev,0)}")
-        stp=(lv.get('stops') or {}).get(c) or {}
-        out.append(f"  Vào lúc: {str(b.get('since') or '?')[:16]} (UTC+7)"+(f" | SL {stp.get('trigger')}" if stp.get('trigger') else ''))
-    if not coins: tu=0.0
-    pct=(tu/tm*100) if tm else 0.0
-    out+=['', f"📈 PNL tạm tính: "+('0' if not coins else f"{'+' if tu>=0 else ''}{_f(tu)} USDT ({'+' if pct>=0 else ''}{pct:.2f}% margin)")]
-    return '\n'.join(out)
 BLOCK_PFX=('ENTRY_BLOCKED','ADD_BLOCKED')
 BLOCK_EV={'LIVE_ENTRY_VETO','LIVE_ENTRY_FAILED','STEP3_SKIP','STEP3_ABORT','STEP3_DROP','STEP3_ENTRY_FAILED'}
 def _isact(ev): return ev in TRADE or ev in BLOCK_EV or ev.startswith(BLOCK_PFX)
@@ -152,6 +107,10 @@ def _pusher():
 def rd():
     try: return int(open(OFF).read().strip())
     except Exception: return 0
+def pnl():
+    from reporting import pnl_text
+    return pnl_text(os.path.dirname(os.path.abspath(__file__)))
+
 def main():
     tok,chat=t._load_env()
     if not tok or not chat: print('no env'); return

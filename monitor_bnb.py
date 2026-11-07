@@ -34,6 +34,15 @@ class Mon:
             except Exception: ok = False
             if not ok: keep.append(m)
         self.s['outbox'] = keep[-20:]
+    def retry_outbox(self):
+        if not self.send_on: return
+        keep = []
+        for txt in self.s['outbox']:
+            try: ok = T._send_direct(txt)
+            except Exception: ok = False
+            if not ok: keep.append(txt)
+        self.s['outbox'] = keep
+
     def alert(self, key, txt, cd):
         now = time.time(); first = key not in self.s['active']
         self.s['active'][key] = now
@@ -93,8 +102,8 @@ class Mon:
             task, n = proc
             if task is None: return
             if task != 'Running' or n == 0:
-                self.alert('proc', f"Task '{M.TASK}': {task} | tiến trình bnb_bot.py: {n} → bot không chạy. Mở start_bnb.bat hoặc nhắn Chuyên gia.", cd)
-            else: self.clear('proc', f"Task '{M.TASK}' Running, tiến trình bnb_bot.py: {n}.")
+                self.alert('proc', f'Launcher BaseAsterTrade (task fallback): {task} | Python bot: {n}. Kiem tra Service va heartbeat; khong tu khoi dong ban thu hai.', cd)
+            else: self.clear('proc', f"Launcher BaseAsterTrade (task fallback) Running, tiến trình bnb_bot.py: {n}.")
     def ip_alert(self, ip, src, c):
         tl = M.trusted_ips(c)
         if not tl: return
@@ -114,10 +123,13 @@ def run():
     m.s['pos'] = m.s.get('pos', os.path.getsize(M.LOG) if os.path.exists(M.LOG) else 0)
     sm = c['session_min']; nxt_sess = m.s.get('next_sess') or (now.replace(second=0, microsecond=0) + dt.timedelta(minutes=sm - now.minute % sm)).isoformat()
     m.s['next_sess'] = nxt_sess; m.s.setdefault('next_sum', (now + dt.timedelta(minutes=c['summary_interval_min'])).isoformat())
+    from reporting import due_window
+    due_window(m.s, now) if m.s.get('summary_schema') != 2 else None
     t_proc = t_ip = 0; mlog('monitor start'); m.tg('ℹ [MONITOR] Bộ giám sát BaseAster đã khởi động. Gõ /status để xem trạng thái.')
     while True:
         try:
             c = M.cfg(); now = dt.datetime.now(); proc = None
+            if m.s['outbox']: m.retry_outbox()
             m.scan_lines(m.read_new(), c)
             if time.time() - t_proc >= c['proc_check_s']: proc = M.proc_task(); t_proc = time.time()
             m.check_alive(c, proc)
@@ -129,10 +141,17 @@ def run():
                 if c.get('send_session_to_telegram'): m.tg(M.summary_text(c['session_min'], 'PHIÊN')[0])
                 while ns <= now: ns += dt.timedelta(minutes=c['session_min'])
                 m.s['next_sess'] = ns.isoformat()
-            nsum = dt.datetime.fromisoformat(m.s['next_sum'])
-            if c['summary_interval_min'] > 0 and now >= nsum:
-                m.tg(M.summary_text(c['summary_interval_min'])[0])
-                m.s['next_sum'] = (now + dt.timedelta(minutes=c['summary_interval_min'])).isoformat()
+            schedule = dict(m.s)
+            due = due_window(schedule, now)
+            if due:
+                text = M.summary_text(120, t0=due[0], t1=due[1])[0]
+                # Persist queued report + schedule together before attempting delivery.
+                m.s.update(schedule)
+                m.s['outbox'].append(text)
+                save(m.s)
+                m.retry_outbox()
+            else:
+                m.s.update(schedule)
             save(m.s)
             open(HB, 'w', encoding='utf-8').write(f"{now:%Y-%m-%d %H:%M:%S} ok active={list(m.s['active'])} ip={m.s.get('ip')}\n")
         except Exception as ex:

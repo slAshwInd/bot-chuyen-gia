@@ -4,9 +4,26 @@ $ErrorActionPreference = 'Continue'
 $dir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $dir
 $T = 'HLBot BNB X5'
-function Running { $bd = $dir.TrimEnd('\'); Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -and (($_.CommandLine -like '*bnb_bot.py*' -and ($_.ExecutablePath -like "$bd\*" -or $_.CommandLine -like "*$bd\*")) -or $_.CommandLine -like "*$bd\run_bnb.ps1*") } }
+function Running {
+  # SYSTEM service command lines are hidden from a normal desktop session.
+  if ((Get-Service 'BaseAsterTrade' -ErrorAction SilentlyContinue).Status -eq 'Running' -and (Test-Path (Join-Path $dir 'ALLOW_PC_RUN.flag')) -and -not (Test-Path (Join-Path $dir 'KILL'))) {
+    $botId = 0
+    [int]::TryParse(((Get-Content (Join-Path $dir 'bot_bnb.pid') -ErrorAction SilentlyContinue) -join ''), [ref]$botId) | Out-Null
+    if ($botId -gt 0) { $botProcess = Get-Process -Id $botId -ErrorAction SilentlyContinue; if ($botProcess) { return $botProcess } }
+  }
+  $bd = $dir.TrimEnd('\'); Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -and (($_.CommandLine -like '*bnb_bot.py*' -and ($_.ExecutablePath -like "$bd\*" -or $_.CommandLine -like "*$bd\*")) -or $_.CommandLine -like "*$bd\run_bnb.ps1*") }
+}
 if (Running) { exit 3 }
 if (-not ((Test-Path (Join-Path $dir 'secrets\binance_api_key.txt')) -and (Test-Path (Join-Path $dir 'secrets\binance_api_secret.txt')))) { exit 4 }
+if (Get-Service 'BaseAsterTrade' -ErrorAction SilentlyContinue) {
+  Remove-Item (Join-Path $dir 'KILL') -ErrorAction SilentlyContinue
+  Set-Content -Path (Join-Path $dir 'ALLOW_PC_RUN.flag') -Value ("unlocked by BAT BOT {0}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')) -Encoding ascii
+  if ((Get-Service 'BaseAsterTrade').Status -eq 'Stopped') {
+    try { Start-Service 'BaseAsterTrade' -ErrorAction Stop } catch { Write-Host 'Start BaseAsterTrade as Administrator.'; exit 5 }
+  }
+  for ($i = 0; $i -lt 30; $i++) { if (Running) { exit 0 }; Start-Sleep -Seconds 1 }
+  exit 5
+}
 if (-not (Get-ScheduledTask -TaskName $T -ErrorAction SilentlyContinue)) { exit 7 }
 Remove-Item (Join-Path $dir 'KILL') -ErrorAction SilentlyContinue
 Set-Content -Path (Join-Path $dir 'ALLOW_PC_RUN.flag') -Value ("unlocked by BAT BOT {0}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')) -Encoding ascii

@@ -5,20 +5,21 @@ DIR = os.path.dirname(os.path.abspath(__file__))
 P = lambda *a: os.path.join(DIR, *a)
 LOG = P('bot_live.log'); EVF = P('events_live.jsonl'); CFG_F = P('monitor_config.json')
 TASK = 'HLBot BNB X5'
-DEF_CFG = {"summary_interval_min": 60, "session_min": 5, "alert_cooldown_min": 15, "stale_loop_s": 120,
+DEF_CFG = {"summary_interval_min": 120, "session_min": 5, "alert_cooldown_min": 15, "stale_loop_s": 120,
            "ip_check_min": 10, "api_fail_threshold": 3, "api_fail_window_min": 5, "proc_check_s": 60,
            "send_session_to_telegram": False, "ip_url": "https://api.ipify.org", "trusted_ips": []}
 def cfg():
     c = dict(DEF_CFG)
     try: c.update(json.load(open(CFG_F, encoding='utf-8')))
     except Exception: pass
+    c["summary_interval_min"] = 120  # User-required reporting cadence; no config write.
     return c
 TS_RE = re.compile(r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})')
 RX_AUTH = re.compile(r'-2015|-2014|-2008|HTTP 401|HTTP 403|Invalid API-key|API-key format invalid', re.I)
 RX_IP = re.compile(r'request ip:\s*([0-9a-fA-F:.]+)')
 RX_API = re.compile(r'API fail|ConnectionError|ConnectTimeout|ReadTimeout|Timeout|Max retries|HTTP 5\d\d|HTTP 429|-1003|-1021|NameResolution|getaddrinfo', re.I)
 RX_EXIT = re.compile(r'bot exited code|restarting in 30s|WATCHDOG:|KILL|BLOCKED:|STOP: ')
-RX_EXC = re.compile(r'Traceback \(most recent call last\)|fast-loop error|live sync error|LOOP log err|Exception|Error:')
+RX_EXC = re.compile(r'SNAPSHOT_WRITE_FAILED|Traceback \(most recent call last\)|fast-loop error|live sync error|LOOP log err|Exception|Error:')
 TRADE = {'STEP3_ENTRY','STEP3_EXIT','ENTRY','ADD','EXIT','STOP','TP_PARTIAL','EXIT_RUNNER','EXIT_15M','TP_PARTIAL_15M',
          'TRAIL_15M','DAILY_TARGET_HIT','LIVE_FLATTEN','LIVE_ENTRY_FAILED','LIVE_ENTRY_VETO','STEP3_DETECT'}
 def is_action(ev): return ev in TRADE or ev.startswith(('ENTRY_BLOCKED','ADD_BLOCKED')) or ev.startswith('STEP3_')
@@ -52,15 +53,32 @@ def last_loop():
 def _hidden():
     return 0x08000000 if os.name == 'nt' else 0
 def proc_task():
-    """-> (task_state str, n_bot_procs int) ; None neu khong doc duoc"""
-    ps = ("$t=(Get-ScheduledTask -TaskName '%s' -ErrorAction SilentlyContinue).State;"
-          "$n=@(Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | ? { $_.CommandLine -like '*bnb_bot.py*' }).Count;"
-          "Write-Output \"$t|$n\"") % TASK
+    """Service is authoritative when installed; task is legacy fallback only.
+    Count Python application leaves, excluding parent venv launcher shims.
+    Scope to this service descendants or Python commands scoped to DIR.
+    Return unknown on failed/denied query, never convert it into Disabled.
+    """
+    root = DIR.replace("'", "''")
+    ps = ("$ErrorActionPreference='Stop';"
+          "$s=Get-Service -Name BaseAsterTrade -ErrorAction SilentlyContinue;"
+          "$all=@(Get-CimInstance Win32_Process);$ids=@();"
+          "if($s){$v=Get-CimInstance Win32_Service -Filter \"Name='BaseAsterTrade'\";"
+          "if($v.ProcessId -gt 0){$ids=@($v.ProcessId);do{"
+          "$ch=@($all | Where-Object {$_.ParentProcessId -in $ids -and $_.ProcessId -notin $ids} | ForEach-Object {$_.ProcessId});"
+          "$ids+= $ch}while($ch.Count -gt 0)};$state=[string]$s.Status}"
+          "else{$state=[string](Get-ScheduledTask -TaskName 'HLBot BNB X5' -ErrorAction SilentlyContinue).State};"
+          "$py=@($all | Where-Object {$_.Name -match '^python(w)?\\.exe$' -and "
+          "($_.ProcessId -in $ids -or ($_.CommandLine -and $_.CommandLine -match '\\bbnb_bot\\.py\\b' -and $_.CommandLine.Contains('%s')))});$n=@($py | Where-Object {$_.ProcessId -notin $py.ParentProcessId}).Count;"
+          "Write-Output \"$state|$n\"") % root
     try:
-        o = subprocess.run(['powershell', '-NoProfile', '-NonInteractive', '-Command', ps], capture_output=True, text=True,
-                           timeout=40, creationflags=_hidden()).stdout.strip().splitlines()[-1]
-        a, b = o.split('|'); return (a or 'KhongCo'), int(b or 0)
-    except Exception: return None, None
+        r = subprocess.run(['powershell', '-NoProfile', '-NonInteractive', '-Command', ps],
+                           capture_output=True, text=True, timeout=40, creationflags=_hidden())
+        if r.returncode: return None, None
+        a, b = r.stdout.strip().splitlines()[-1].split('|')
+        return a or 'Missing', int(b)
+    except Exception:
+        return None, None
+
 def window(t0, t1):
     """Tong hop log + events trong [t0,t1)."""
     r = {'loops': 0, 'first': None, 'last': None, 'errs': {'auth': 0, 'api': 0, 'exit': 0, 'exc': 0}, 'err_samples': [],
@@ -97,23 +115,12 @@ def act_line(e):
     ev = e.get('event'); tm = str(e.get('time', ''))[11:16]
     px = e.get('price'); rs = str(e.get('reason') or '')[:120]
     return f"• {tm} {ev} {e.get('side') or ''} {e.get('coin') or ''}" + (f" @ {px}" if px not in (None, '', 0) else '') + (f" — {rs}" if rs and ev.endswith(('BLOCKED_RULES','BLOCKED_BTC','VETO','FAILED')) else '')
-def summary_text(minutes, title='TỔNG HỢP'):
-    t1 = dt.datetime.now(); t0 = t1 - dt.timedelta(minutes=minutes); r = window(t0, t1)
-    exp = minutes * 60 / 15
-    run = 'CÓ chạy' if r['loops'] >= exp * 0.5 else ('chạy GIÁN ĐOẠN' if r['loops'] else 'KHÔNG chạy')
-    lp = last_loop()
-    from collections import Counter
-    cnt = Counter(str(e.get('event')) for e in r['actions'])
-    out = [f"[LIVE] {title} {t0:%H:%M}–{t1:%H:%M} {t1:%d/%m} (UTC+7)",
-           f"Bot: {run} ({r['loops']} vòng LOOP / ~{int(exp)})",
-           f"Lỗi: key/IP {r['errs']['auth']} | API {r['errs']['api']} | thoát/khởi động lại {r['errs']['exit']} | exception {r['errs']['exc']}"
-           + (f" | IP bị từ chối: {', '.join(sorted(r['ips']))}" if r['ips'] else ''),
-           f"Hành động: {len(r['actions'])}" + (' (' + ', '.join(f'{k} {v}' for k, v in cnt.items()) + ')' if cnt else ' (không có)')]
-    out += [act_line(e) for e in r['actions'][-8:]]
-    if r['halted']: out.append(f"⚠ halted: {', '.join(r['halted'])}")
-    if r['sync_false']: out.append(f"⚠ sync_ok=False {r['sync_false']} lần")
-    if lp: out.append(f"Equity: {_eq(lp['equity'])} | Vị thế: {lp['pos']} | Stop: {lp['stops']}")
-    return '\n'.join(out), r
+def summary_text(minutes=120, title='PHIEN', t0=None, t1=None):
+    from reporting import summary
+    t1 = t1 or dt.datetime.now()
+    t0 = t0 or t1 - dt.timedelta(minutes=minutes)
+    return summary(DIR, t0, t1, parse_loop, classify)
+
 def session_line(t0, t1):
     r = window(t0, t1); lp = r['last'] or {}
     return (f"{t0:%Y-%m-%d %H:%M}-{t1:%H:%M} loops={r['loops']} run={'Y' if r['loops'] >= 10 else ('PARTIAL' if r['loops'] else 'N')} "
@@ -121,20 +128,26 @@ def session_line(t0, t1):
             f"actions={len(r['actions'])}[{';'.join(str(e.get('event'))+':'+str(e.get('coin') or '') for e in r['actions'])}] "
             f"equity={lp.get('equity')} pos={lp.get('pos')} stops={lp.get('stops')} sync_ok={lp.get('sync_ok')} halted={lp.get('halted')}")
 def status_text():
-    c = cfg(); lp = last_loop(); task, n = proc_task(); now = dt.datetime.now()
-    age = (now - lp['ts']).total_seconds() if lp and lp['ts'] else None
-    alive = age is not None and age < c['stale_loop_s'] and (n or 0) > 0
-    errs = last_errors(1)
-    out = [f"[LIVE] TRẠNG THÁI BOT {now:%H:%M:%S %d/%m} (UTC+7)",
-           ('✅ Bot ĐANG HOẠT ĐỘNG' if alive else '🛑 Bot KHÔNG HOẠT ĐỘNG / bất thường'),
-           f"Task '{TASK}': {task} | tiến trình bnb_bot.py: {n}",
-           f"LOOP cuối: {lp['ts'] if lp else '-'}" + (f" ({int(age)}s trước)" if age is not None else ''),
-           ]
+    c = cfg(); lp = last_loop(); launcher, n = proc_task(); now = dt.datetime.now()
+    age = (now-lp['ts']).total_seconds() if lp and lp['ts'] else None
+    fresh = age is not None and 0 <= age < c['stale_loop_s']
+    alive = fresh and launcher == 'Running' and n is not None and n == 1
+    state = 'DANG HOAT DONG' if alive else ('CHUA XAC MINH SERVICE' if launcher is None else 'BAT THUONG')
+    out = [f'[LIVE] STATUS {now:%d/%m/%Y %H:%M:%S} UTC+7', f'Bot: {state}',
+           f'Launcher BaseAsterTrade (task chi fallback): {launcher} | Python bot: {n}',
+           f'Heartbeat: {lp["ts"] if lp else "?"} | age={int(age) if age is not None else "?"}s']
     if lp:
-        out += [f"sync_ok: {lp['sync_ok']} | halted: {lp['halted']}", f"Equity: {_eq(lp['equity'])}",
-                f"Vị thế: {lp['pos']} | Stop: {lp['stops']}", f"Theo dõi: {lp['watch']}"]
-    out.append('Lỗi gần nhất: ' + (errs[0] if errs else 'không có'))
+        out += [f'Sync={lp["sync_ok"]} | Halted={lp["halted"]}',
+                f'Equity={_eq(lp["equity"])} | Vi the={lp["pos"]}']
+    from reporting import decision_text
+    out.append(decision_text(DIR))
+    errs = last_errors(1)
+    if errs:
+        match = TS_RE.search(errs[0])
+        out.append('Su co gan nhat trong LICH SU: ' + (match.group(1) if match else 'xem /log') + '; xem heartbeat/Sync hien tai de xac dinh phuc hoi.')
+    out.append('Service Running khong dong nghia giao dich binh thuong; xem Sync/Halted va heartbeat.')
     return '\n'.join(out)
+
 def last_errors(n=8):
     res = []; cur = ''
     for l in tail_lines(LOG, 800000):

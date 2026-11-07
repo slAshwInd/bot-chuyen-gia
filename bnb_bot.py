@@ -678,7 +678,8 @@ def main():
                             r30_1d=R.get('r30'),r60_1d=R.get('r60'),chg7_1d=R.get('chg7'),chg14_1d=R.get('chg14'),chg30_1d=R.get('chg30'),bw_ratio_1d=R.get('bwr'),pb_1d=R.get('pb'),why_unstable='; '.join(R.get('stab_bad',[]))))
                 pd.DataFrame(rows).to_csv(B+'data/bb_rank_latest.csv',index=False)
             except Exception as ex: st['rank_csv_err']=str(ex)
-        json.dump(st,open(STF+'.tmp','w'),ensure_ascii=False,indent=1,default=str);os.replace(STF+'.tmp',STF)
+        from snapshot_io import write_snapshot
+        write_snapshot(STF, st, log=lambda msg: print(str(now())[:19], msg, flush=True))
         save_books()
         try:      # [monitor patch] one heartbeat/decision line per 60s cycle
             _lv=st.get('live') or {};print('LOOP',str(tnow),'sync_ok=%s'%_lv.get('sync_ok'),'halted=%s'%_lv.get('halted'),'equity=%s'%_lv.get('equity'),'pos=%s'%sorted(_lv.get('exchange_positions') or {}),'stops=%s'%sorted(_lv.get('stops') or {}),'btc_allow=%s/%s'%((st.get('btc') or {}).get('allow'),(st.get('btc') or {}).get('allow_s')),'btc_block=%s/%s'%((st.get('btc_recheck') or {}).get('block'),(st.get('btc_recheck') or {}).get('block_s')),'step3=%s'%((('POS_'+S3.pos['side']) if S3.pos else ('WAIT_'+'/'.join(p_['side'] for p_ in S3.D.pend) if S3.D.pend else 'idle'))),'batday=%s'%(('POS' if BD.pos else ('PEND' if BD.pend else ('on' if BD.on else 'off')))),'watch='+','.join(f"{k_}:{v_['price']}(lo{(v_['price']/v_['lo']-1)*100:+.2f}%/up{(v_['up']/v_['price']-1)*100:.2f}%)" for k_,v_ in (st.get('watch') or {}).items() if v_.get('lo') and v_.get('up')),flush=True)
