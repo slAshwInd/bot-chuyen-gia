@@ -79,3 +79,6 @@ must not be run after consolidation. Unified activation is NOT YET VERIFIED.
 ## Staged activation gate
 The approved migration installer is install_unified_service.ps1. Copy only this script, service_supervisor.py and mon_common.py to runtime after checks. Run elevated in runtime. It starts the host with SERVICE_MIGRATION_HOLD.flag: Telegram and Monitor run, Trade does not. Owner MUST verify exchange positions/orders AFTER old Trade stops. Only after explicit owner confirmation remove that one hold file, then verify Trade fresh LOOP/Sync and monitor schedule. Never remove KILL or ALLOW gates automatically. Never copy the hold flag via Git. Host Running with Trade held is intentionally not healthy trading. Existing NSSM environment is not exported or overwritten. If install fails, inspect phase before any retry; do not auto-run old rescale launcher.
 
+
+Resume clarification: manual dashboard.py is permitted and is NOT a duplicate managed child. Installer duplicate checks cover only Trade/Telegram/Monitor. -ResumeAfterOwnerFlatConfirmation may be used ONLY after the specific unmanaged-child preflight abort, with old services stopped, migration hold present, no managed children, and explicit owner confirmation that exchange positions/orders are empty after the stop. It does not bypass KILL or automatically release Trade hold.
+

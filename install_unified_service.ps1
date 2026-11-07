@@ -1,4 +1,4 @@
-param([switch]$ValidateOnly)
+param([switch]$ValidateOnly,[switch]$ResumeAfterOwnerFlatConfirmation)
 $ErrorActionPreference='Stop'
 $dir=$PSScriptRoot
 $nssm=(Get-Command nssm.exe -ErrorAction Stop).Source
@@ -19,10 +19,20 @@ try {
     $svc=Get-Service BaseAsterTrade -ErrorAction Stop
     if ((& $nssm get BaseAsterTrade AppParameters) -match 'service_supervisor') { throw 'Host already configured; inspect before any retry.' }
     if (Test-Path "$dir\KILL") { throw 'KILL is present; never automatically unlock.' }
+    if ($ResumeAfterOwnerFlatConfirmation) {
+        if (-not (Test-Path "$dir\SERVICE_MIGRATION_HOLD.flag")) { throw 'Resume requires existing migration hold.' }
+        $previous=Get-Content $result -Raw | ConvertFrom-Json
+        if ($previous.ok -or $previous.error -ne 'Unmanaged child remains; no duplicate launch.') { throw 'Unexpected prior migration phase; inspect manually.' }
+        foreach ($name in @('BaseAsterTrade','BaseAsterTelegram','BaseAsterMonitor','BaseAsterDashboard')) {
+            $old=Get-Service $name -ErrorAction SilentlyContinue
+            if ($old -and $old.Status -ne 'Stopped') { throw 'Resume requires all old services stopped.' }
+        }
+    } else {
     $line=Get-Content "$dir\bot_live.log" -Tail 100 | Where-Object { $_ -match '^LOOP ' } | Select-Object -Last 1
     if ($line -notmatch 'sync_ok=True halted=None.*pos=\[\] stops=\[\]') { throw 'Fresh flat synced LOOP required before stopping.' }
     $stamp=[datetime]::ParseExact($line.Substring(5,19),'yyyy-MM-dd HH:mm:ss',[cultureinfo]::InvariantCulture)
     if (((Get-Date)-$stamp).TotalSeconds -gt 30) { throw 'LOOP stale; abort before service changes.' }
+    }
     $hash=(Get-FileHash "$dir\config_live.json").Hash
     # New Trade cannot start until human verifies account AFTER the old Trade stops.
     'Awaiting owner post-stop exchange verification; do not remove automatically.' | Set-Content "$dir\SERVICE_MIGRATION_HOLD.flag" -Encoding ascii
@@ -41,7 +51,7 @@ try {
     }
     $left=@(Get-CimInstance Win32_Process | Where-Object {
         $_.Name -match '^pythonw?\.exe$' -and $_.CommandLine -and
-        $_.CommandLine -match '(bnb_bot|tg_live_poller|monitor_bnb|dashboard)\.py' -and
+        $_.CommandLine -match '(bnb_bot|tg_live_poller|monitor_bnb)\.py' -and
         ($_.ExecutablePath.StartsWith($dir) -or $_.CommandLine.Contains($dir))
     })
     if ($left.Count) { throw 'Unmanaged child remains; no duplicate launch.' }
