@@ -1,8 +1,8 @@
 """Shared helpers: Binance USDT-M Futures PUBLIC market data (read-only, no keys) + indicators.
 Drop-in replacement of the Hyperliquid hl.py: same function names/outputs so the strategy code is unchanged.
 Coin name = Binance symbol without the 'USDT' suffix (BTCUSDT -> BTC, 1000PEPEUSDT -> 1000PEPE)."""
-import requests,time,threading,pandas as pd,numpy as np
-BASE='https://fapi.binance.com'
+import requests,time,threading,pandas as pd,numpy as np,os
+BASE=os.environ.get('BNB_DATA_BASE') or 'https://fapi.binance.com'      # optional alternate FAPI-compatible host (e.g. testnet); default unchanged
 _S=requests.Session();_L=threading.Lock()
 IV_MS={'1m':60000,'3m':180000,'5m':300000,'15m':900000,'30m':1800000,'1h':3600000,'2h':7200000,'4h':14400000,'6h':21600000,'12h':43200000,'1d':86400000,'1w':604800000}
 LEV_PROVIDER=None          # set by bnx.BNX when an API key is loaded: callable() -> {coin: max leverage} (GET /fapi/v1/leverageBracket, signed)

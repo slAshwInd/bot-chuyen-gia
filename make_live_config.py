@@ -5,7 +5,7 @@ Ladder 750/250/250/250 (x live equity/5000), adds ON, x5 isolated, max 2 positio
 import json,sys,copy
 src=sys.argv[1] if len(sys.argv)>1 else 'ref/config_paper.json';CAP=float(sys.argv[2]) if len(sys.argv)>2 else 3800.0;BASE=5000.0;F=CAP/BASE
 c=json.load(open(src,encoding='utf-8'));o={}
-for k in('exit_rule','partial_frac','gate2','btc_recheck','entry_rank','stop_exec','reentry','excluded_coins','dynamic_universe','short_side','exit_hold_mid4h','sizing','short_gate','leverage','exit_rule_history','btc_vol','entry_filter','force_universe','min_equity','branch_display_name','step3'):
+for k in('exit_rule','partial_frac','gate2','btc_recheck','entry_rank','stop_exec','reentry','excluded_coins','dynamic_universe','short_side','exit_hold_mid4h','sizing','short_gate','leverage','exit_rule_history','btc_vol','entry_filter','force_universe','min_equity','branch_display_name','step3','batday','cycle_s','coins','trendmr'):
     if k in c:o[k]=copy.deepcopy(c[k])
 B=copy.deepcopy(c['groups']['BASE'])
 B['ladder']=list(c['groups']['BASE']['ladder'])    # 750/250/250/250 margin at base 5000; scaled by live equity/5000 in LiveBook.leg()

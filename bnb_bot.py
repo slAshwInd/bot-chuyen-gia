@@ -10,6 +10,7 @@ import sys,livecore
 import tg_live
 import step3
 import batday
+import trendmr
 S3REF=[None]
 BDREF=[None]
 import bnx as hlx
@@ -155,6 +156,7 @@ def main():
     def ok_lev(c,lv):
         lev_refresh();return (not lv) or MAXLEV.get(c,0)>=lv
     EXCL=set(str(x).upper() for x in (cfg.get('excluded_coins') or []))      # Vien 15/10 22:5x: BTC/ETH are NOT trade candidates (no entry, no shortlist membership; both sides, both branches). BTC data for the market filter (btc_update/regime) is fetched separately and unaffected; open positions on excluded coins are managed normally (exits + adds)
+    EXCL|={str(c_).upper() for c_,v_ in (cfg.get('coins') or {}).items() if isinstance(v_,dict) and v_.get('enabled') is False}      # master per-coin toggle (cfg['coins']): enabled=false -> no new entries anywhere (books + modules read the same section); open positions still managed
     DYN={};DYN_S={};SLF=B+'state/shortlist.json';SL_META={};SHORT_ON=bool((cfg.get('short_side') or {}).get('enabled'))
     if DYN_ON:      # dynamic market-wide shortlist per group (Vien 09/10 11:04/11:05): groups keep a fixed SELECTION RULE, not a fixed coin list
         if os.path.exists(SLF):
@@ -309,6 +311,8 @@ def main():
     BD=batday.BatDay(B,cfg,LIVE,candles,bb,tg_live.send,lambda e:jl(EVF,e),busy_check=_batday_busy);BDREF[0]=BD
     S3.entry_block=lambda:(BD.holding(),'module bắt đáy đang giữ/đang vào lệnh: bỏ qua tín hiệu SHORT sau bơm (không hoãn)')
     print('BATDAY enabled=%s dry_run=%s (replaces step3 LONG; step3.long_enabled=%s) CYCLE_S=%s FAST=%s'%(BD.on, BD.mod_dry or LIVE.dry, bool(S3.C.get('long_enabled',False)), cfg.get('cycle_s',5), FAST), flush=True)
+    TMR=trendmr.TrendMR(B,cfg,LIVE,candles,bb,tg_live.send,lambda e:jl(EVF,e))      # TrendMR-1H (BTC/ETH/BNB): own module like BatDay; paper by default (cfg['trendmr']), live locked
+    print('TRENDMR enabled=%s dry_run=%s coins=%s capital=%s'%(TMR.on,TMR.dry,TMR.coins,(cfg.get('trendmr') or {}).get('capital_usdt',trendmr.DEF['capital_usdt'])),flush=True)
     def close_ba(c_,tn,px_,why_):
         try:LB.close(c_,tn,px_,why_,CFG['fee_taker'],kind='EXIT_15M')
         except livecore.VetoClose:return False
@@ -528,6 +532,7 @@ def main():
                 bsy,w=_batday_busy(); return (not bsy), w
             BD.tick(LB,tnow,m,account_flat_fn=_flat)
             S3.tick(LB,tnow,m,close_ba)      # detector always advances (no catch-up replay); SHORT entries are DISCARDED while batday holds (S3.entry_block)
+            TMR.tick(tnow,m)      # TrendMR-1H: self-contained module (own paper positions/state); never touches BaseAster books
         for c in ALL:
             cl=BARS[c][BARS[c].closed]
             newbar=cl.index[-1]!=lastclosed.get(c);cb[c]=cl.iloc[-1] if (newbar and c in lastclosed) else None;lastclosed[c]=cl.index[-1]
@@ -665,7 +670,7 @@ def main():
         st['ranking']={'bb_min':BB_MIN,'stab_rule':dict(bbrank.ST),'coins':{c:{k:v for k,v in (RANK.get(c) or {}).items()} for c in ALL},
             'universes':{g:[c for c in sorted(guni(g),key=lambda c:-sc(c))] for g in G}}
         st['live']=LIVE.status(LB)
-        st['step3']=S3.status(); st['batday']=BD.status()
+        st['step3']=S3.status(); st['batday']=BD.status(); st['trendmr']=TMR.status()
         if SCAN is not None: st['shortlist']=dict(SL_META,busy=SCAN.busy,err=SCAN.err,lists=DYN,lists_short=DYN_S,short_on=SHORT_ON,rules={g:G[g].get('rule_label','') for g in G})
         if time.time()-RKCSV_T[0]>=300 or not os.path.exists(B+'data/bb_rank_latest.csv'):
             RKCSV_T[0]=time.time()
