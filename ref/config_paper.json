@@ -652,5 +652,97 @@
  "entry_filter": {
   "mom4h_pct": 0.7,
   "note": "Vien 30/10 14:29 (t546u): giong BaseAster t544u"
+ },
+ "coins": {
+  "ASTER": {
+   "enabled": true
+  },
+  "BTC": {
+   "enabled": true
+  },
+  "ETH": {
+   "enabled": true
+  },
+  "BNB": {
+   "enabled": true
+  },
+  "note": "Master per-coin toggle: enabled=false -> coin is treated as excluded for NEW entries platform-wide (BaseAster books + BatDay/Step3 + TrendMR); open positions keep being managed/exited normally. Default: all four enabled."
+ },
+ "trendmr": {
+  "enabled": true,
+  "dry_run": true,
+  "allow_live": false,
+  "coins": {
+   "BTC": true,
+   "ETH": true,
+   "BNB": true,
+   "ASTER": false
+  },
+  "capital_usdt": 5000,
+  "notional_x": 1.0,
+  "lev": 5,
+  "bb_n": 20,
+  "bb_k": 2.0,
+  "ema_n": 100,
+  "mom_gate_pct": 0.7,
+  "slope_gate_pct": 3.0,
+  "sl_pct": 1.5,
+  "lock_step_pct": 1.0,
+  "lock_frac": 0.6666666666666666,
+  "book15_exit": true,
+  "book15_eps": 8.0,
+  "book15_small": 60.0,
+  "book15_th": -3,
+  "book15_th_small": -4,
+  "be_trigger_pct": 0.6,
+  "be_buf": 1.002,
+  "tp_min_profit_pct": 0.3,
+  "max_hold_h": 0,
+  "fee_maker": 0.0002,
+  "fee_taker": 0.0005,
+  "slip": 0.0005,
+  "short_size_factor": {
+   "BNB": 0.5
+  },
+  "daily_loss_alert_pct": 3.0,
+  "consec_sl_alert": 3,
+  "dd_alert_pct": 12.0,
+  "coin_params": {
+   "BNB": {
+    "bb_k": 2.5
+   }
+  },
+  "note": "TrendMR-1H (module trendmr.py): BB(20,2) 1h band touch, ONLY with the EMA100 trend (long above / short below), BaseAster mom4h + 4h-slope gates kept; TP at 1h mid band, SL 1.5%, BE at +0.6%, BaseAster-style milestone profit lock (every 1% of peak locks >= 2/3), NO time exit. Risk layer follows BaseAster: NO daily/consecutive/drawdown trading blocks - the *_alert_* thresholds only emit TRENDMR_ALERT events; hard protection is the per-position stop. Paper (dry_run) by default; live stays locked (allow_live=false) until the paper acceptance criteria pass (>=150 trades, winrate >=65%, PF >=1.2). ASTER stays on BaseAster/BatDay/Step3 (trendmr.coins.ASTER=false). Per-pair split (evidence-based, 2021-2026): BNB uses bb_k=2.5 via coin_params (beat the unified 2.0 on FULL/OOS/stress/DD); BTC and ETH keep the unified set (their deviations failed OOS or cost-stress). Exit variants tested 2026-11-08: milestone lock improved all 3 coins (BTC PF 1.51->1.56, ETH 1.67->1.69, BNB 1.56->1.63, stress OOS up everywhere); removing the 120h time exit changed nothing (avg hold 2-4h) and matches BaseAster; partial-50% + runner to the opposite band was REJECTED (PF fell to 1.18-1.29, stress negative). Book15 auxiliary exit ADDED in 1.3.2 (variant V1, dedicated 15m-walker backtest 2021-2026): score15 exit ON TOP of the mid-band TP, literal Book15 USD thresholds (eps 8 / small 60 / th -3 / th_small -4), gated on having touched the 4h mid band since entry; OOS 2026 PF vs 1.3.1 on the same walker BTC 1.81->1.92, ETH 1.99->2.02, BNB 1.71->2.36; dropping the mid-band TP for score-only exits (V2/V4) was REJECTED (stress OOS negative on BTC/ETH), and sleeve-scaled thresholds (V1s) were not adopted. SIZING 1.3.3 (user-approved 2026-11-08): G2 compounding gross budget replaces static sleeves - budget at entry = realised equity x gross_lev (5), positions take 50/30/20% of the budget in arrival order, BNB-short factor 0.5 applied last; DD throttle halves the budget factor when realised equity is >=12% below its peak and quarters it at >=20% (backtest: full-period DD -30.2% -> -22.0%, 2025/2026 returns nearly intact). PERFORMANCE GOVERNANCE (user, 2026-11-08): cumulative winrate/PF milestones by closed trades (30: 55%/0.9; 75: 60%/1.0 + net>0; 150: 65%/1.2 = the acceptance bar) plus rolling-50 PF >= 1.0; any breach sets REVIEW_HOLD - new entries stop (open positions still exit normally) until the hourly session reviews the strategy and the user approves adjustments/resume. Rationale: Monte Carlo on the expected 72.5% winrate / +0.173% expectancy balance gives P(DD>=70%) ~0%, but a half-decayed edge makes blow-up the median outcome, so underperformance must force a review BEFORE continuing, not after. SIZING 1.3.4 (user-approved 2026-11-08, after leverage_alloc_eval.py): allocation switched from slot shares (50/30/20 of the budget by position count) to REMAINING-budget fractions - position #1/#2/#3 takes 50% / 60% / 100% of the remaining budget (budget minus deployed notional), per-position cap 50% of the budget applied before the coin factor; mathematically identical to 50/30/20 when prior positions are full-size, but a small or factor-reduced earlier position (e.g. the pre-1.3.3 BNB sleeve trade, or a BNB short at factor 0.5) no longer wastes its slot's share. Gross leverage stays x5 (evaluated x3-x10: x5 kept - higher gross sharply worsens survival when the edge decays, lower gross sacrifices most of the return for little DD relief). Backtest vs slot at x5 + throttle: 2025 +694% (DD -18.4%) vs +662% (-18.7%); 2026 +299% (DD -22.7%) vs +310% (-19.5%) - roughly neutral, adopted for budget-utilisation correctness per the user's stated intent.",
+  "gross_lev": 5.0,
+  "gross_remain_fracs": [
+   0.5,
+   0.6,
+   1.0
+  ],
+  "gross_cap_frac": 0.5,
+  "throttle_dd1_pct": 12.0,
+  "throttle_m1": 0.5,
+  "throttle_dd2_pct": 20.0,
+  "throttle_m2": 0.25,
+  "review_milestones": [
+   {
+    "n": 30,
+    "wr": 55.0,
+    "pf": 0.9
+   },
+   {
+    "n": 75,
+    "wr": 60.0,
+    "pf": 1.0
+   },
+   {
+    "n": 150,
+    "wr": 65.0,
+    "pf": 1.2
+   }
+  ],
+  "review_netpos_n": 75,
+  "review_roll_window": 50,
+  "review_roll_pf": 1.0
  }
 }

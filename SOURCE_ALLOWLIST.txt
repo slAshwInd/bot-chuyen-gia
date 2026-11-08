@@ -68,3 +68,7 @@ test_service_supervisor.py
 install_unified_service.ps1
 report_reload.py
 test_report_reload.py
+trendmr.py
+trendmr_paper.py
+tests/test_trendmr.py
+README_TrendMR.md
