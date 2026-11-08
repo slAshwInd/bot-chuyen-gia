@@ -1,0 +1,53 @@
+# PumpScout example config - copy to the runtime dir as pumpscout.toml.
+# Every threshold lives here; code holds no trading constants.
+# NEVER put keys, tokens or passwords in this file (the loader refuses).
+
+[operation]
+mode = "shadow"
+allow_live = false
+rpc_url = "https://api.mainnet-beta.solana.com"
+pumpportal_ws = "wss://pumpportal.fun/api/data"
+rpc_daily_budget = 30000
+helius_api_daily_budget = 8000
+max_analyses_per_hour = 350
+
+[discovery]
+min_age_seconds = 120.0
+max_curve_pct = 40.0
+buffer_ttl_seconds = 900.0
+
+[safety]
+top10_fail_pct = 0.25
+provider_risk_reject = 0.70
+
+[liquidity]
+liquidity_multiple_min = 10.0
+liquidity_multiple_recommended = 20.0
+impact_reduce_above = 0.03
+impact_reject_above = 0.05
+max_slippage_bps = 300
+
+[flow]
+min_unique_buyers = 5
+min_wallet_diversity = 0.30
+bundle_penalty_above = 0.20
+bundle_reject_above = 0.35
+min_organic_share = 0.50
+
+[scoring]
+min_total_score = 0.65
+min_potential_score = 0.15
+weights_risk_inverse = 0.35
+weights_liquidity_curve = 0.20
+weights_wallet_diversity = 0.20
+weights_potential = 0.15
+weights_social = 0.10
+
+[risk]
+paper_capital_sol = 5.0
+max_position_sol = 0.25
+min_position_sol = 0.05
+daily_budget_sol = 1.0
+daily_loss_limit_sol = 0.25
+max_trades_per_day = 10
+max_open_positions = 3

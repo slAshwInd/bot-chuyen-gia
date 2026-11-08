@@ -1,0 +1,15 @@
+[Unit]
+Description=PumpScout shadow scanner (pump.fun, P1 - no trading)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/hatch/workspace/crypto-strategy/bot-v2
+ExecStart=/home/hatch/pumpscout-runtime/venv/bin/python -m pumpscout.bot --config /home/hatch/pumpscout-runtime/pumpscout.toml --data-dir /home/hatch/pumpscout-runtime
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
