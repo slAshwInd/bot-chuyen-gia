@@ -221,3 +221,21 @@ class BudgetTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MetadataUrlTest(unittest.TestCase):
+    def test_gateway_lock(self):
+        from pumpscout.enrichment import _metadata_url
+        self.assertEqual(_metadata_url("ipfs://QmXyz/1.json"),
+                         "https://ipfs.io/ipfs/QmXyz/1.json")
+        self.assertEqual(_metadata_url("ipfs://ipfs/QmXyz"),
+                         "https://ipfs.io/ipfs/QmXyz")
+        self.assertEqual(_metadata_url("ar://abc123"),
+                         "https://arweave.net/abc123")
+        self.assertEqual(_metadata_url("https://random.host/ipfs/QmXyz"),
+                         "https://ipfs.io/ipfs/QmXyz")
+        self.assertEqual(_metadata_url("https://ipfs.io/ipfs/QmXyz"),
+                         "https://ipfs.io/ipfs/QmXyz")
+        self.assertIsNone(_metadata_url("https://floatv2.xyz/meta.json"))
+        self.assertIsNone(_metadata_url("https://garphe.workers.dev/x"))
+        self.assertIsNone(_metadata_url(""))

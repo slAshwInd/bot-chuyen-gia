@@ -128,6 +128,32 @@ def parse_mint_account(data: bytes) -> tuple[str | None, str | None]:
     return coption(0), coption(46)
 
 
+def _metadata_url(uri: str) -> str | None:
+    """Normalize a token metadata URI to a fixed-gateway URL, or None.
+
+    Allowed: ipfs:// (via ipfs.io), ar:// (via arweave.net), any URL
+    whose path carries /ipfs/<cid> (rewritten to ipfs.io), and direct
+    https URLs already on ipfs.io or arweave.net. Everything else is
+    refused - the caller treats it as blind, never as a fetch error."""
+    from urllib.parse import urlparse
+    u = (uri or "").strip()
+    if u.startswith("ipfs://"):
+        path = u[len("ipfs://"):]
+        if path.startswith("ipfs/"):
+            path = path[len("ipfs/"):]
+        return "https://ipfs.io/ipfs/" + path
+    if u.startswith("ar://"):
+        return "https://arweave.net/" + u[len("ar://"):]
+    parsed = urlparse(u)
+    if parsed.scheme in ("http", "https"):
+        if "/ipfs/" in parsed.path:
+            cid_path = parsed.path.split("/ipfs/", 1)[1]
+            return "https://ipfs.io/ipfs/" + cid_path
+        if parsed.hostname in ("ipfs.io", "arweave.net"):
+            return u
+    return None
+
+
 class Enricher:
     def __init__(self, rpc_url: str, timeout: float = 4.0, budget=None):
         self.rpc = Rpc(rpc_url, timeout)
@@ -304,10 +330,15 @@ class Enricher:
         return tuple(out)
 
     def _metadata_socials(self, uri: str) -> bool | None:
-        """Social presence from the token metadata JSON itself."""
-        url = uri
-        if url.startswith("ipfs://"):
-            url = "https://ipfs.io/ipfs/" + url[len("ipfs://"):]
+        """Social presence from the token metadata JSON itself.
+
+        Fetches go ONLY through fixed gateways (see _metadata_url):
+        token creators can point metadata at arbitrary hosts, and an
+        unbounded fetch set is both a prompt/approval nuisance and an
+        SSRF-shaped risk. Unresolvable URIs simply stay blind."""
+        url = _metadata_url(uri)
+        if url is None:
+            return None
         try:
             r = self.session.get(url, timeout=self.timeout)
             r.raise_for_status()
