@@ -14,6 +14,12 @@ for v in http_proxy https_proxy HTTP_PROXY HTTPS_PROXY; do
   val="${!v:-}"
   [ -n "$val" ] && systemctl set-environment "$v=$val"
 done
+# TLS through the egress proxy needs the custom CA bundle; keep the
+# manager environment carrying it so (re)started services verify certs.
+for v in SSL_CERT_FILE REQUESTS_CA_BUNDLE; do
+  val="${!v:-}"
+  [ -n "$val" ] && systemctl set-environment "$v=$val"
+done
 
 if [ ! -f /etc/systemd/system/$UNIT.service ]; then
   cp "$DIR/$UNIT.service" /etc/systemd/system/ && systemctl daemon-reload

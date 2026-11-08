@@ -38,6 +38,17 @@ CREATE TABLE IF NOT EXISTS fate_labels(
 CREATE TABLE IF NOT EXISTS daily_stats(
   day TEXT NOT NULL, key TEXT NOT NULL, value REAL NOT NULL,
   PRIMARY KEY(day, key));
+CREATE TABLE IF NOT EXISTS paper_fills(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, mint TEXT NOT NULL,
+  kind TEXT NOT NULL, reason TEXT, price REAL, tokens REAL,
+  sol_amount REAL, fee_sol REAL, pnl_sol REAL);
+CREATE TABLE IF NOT EXISTS paper_positions(
+  mint TEXT PRIMARY KEY, entry_ts REAL NOT NULL, entry_price REAL NOT NULL,
+  tokens_initial REAL NOT NULL, tokens_held REAL NOT NULL,
+  cost_total_sol REAL NOT NULL, realised_sol REAL NOT NULL DEFAULT 0,
+  tp_done INTEGER NOT NULL DEFAULT 0, peak_price REAL NOT NULL,
+  last_price REAL, status TEXT NOT NULL DEFAULT 'open',
+  exit_ts REAL, exit_reason TEXT);
 """
 
 
@@ -112,6 +123,62 @@ class Ledger:
                 "SELECT snapshot FROM analyses WHERE mint = ? ORDER BY id DESC LIMIT 1",
                 (mint,)).fetchone()
         return json.loads(row[0]) if row else None
+
+    # ---- paper trading (P2): fills are append-only; positions are the book
+    def add_fill(self, ts: float, mint: str, kind: str, reason: str | None,
+                 price: float | None, tokens: float | None,
+                 sol_amount: float | None, fee_sol: float | None,
+                 pnl_sol: float | None) -> None:
+        with self._lock:
+            self.db.execute(
+                "INSERT INTO paper_fills(ts,mint,kind,reason,price,tokens,"
+                "sol_amount,fee_sol,pnl_sol) VALUES(?,?,?,?,?,?,?,?,?)",
+                (ts, mint, kind, reason, price, tokens, sol_amount,
+                 fee_sol, pnl_sol))
+            self.db.commit()
+
+    def save_position(self, pos: dict) -> None:
+        with self._lock:
+            self.db.execute(
+                "INSERT INTO paper_positions(mint,entry_ts,entry_price,"
+                "tokens_initial,tokens_held,cost_total_sol,realised_sol,"
+                "tp_done,peak_price,last_price,status,exit_ts,exit_reason)"
+                " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)"
+                " ON CONFLICT(mint) DO UPDATE SET tokens_held=excluded.tokens_held,"
+                " realised_sol=excluded.realised_sol, tp_done=excluded.tp_done,"
+                " peak_price=excluded.peak_price, last_price=excluded.last_price,"
+                " status=excluded.status, exit_ts=excluded.exit_ts,"
+                " exit_reason=excluded.exit_reason",
+                (pos["mint"], pos["entry_ts"], pos["entry_price"],
+                 pos["tokens_initial"], pos["tokens_held"],
+                 pos["cost_total_sol"], pos["realised_sol"],
+                 int(pos["tp_done"]), pos["peak_price"], pos.get("last_price"),
+                 pos["status"], pos.get("exit_ts"), pos.get("exit_reason")))
+            self.db.commit()
+
+    def load_open_positions(self) -> list[dict]:
+        with self._lock:
+            cur = self.db.execute(
+                "SELECT * FROM paper_positions WHERE status='open'")
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+    def paper_day_aggregates(self, day_start_ts: float) -> dict:
+        """Entries count, gross spent and realised PnL since day_start_ts."""
+        with self._lock:
+            entries, spent = self.db.execute(
+                "SELECT COUNT(*), COALESCE(SUM(sol_amount),0) FROM paper_fills"
+                " WHERE kind='entry' AND ts >= ?", (day_start_ts,)).fetchone()
+            realised = self.db.execute(
+                "SELECT COALESCE(SUM(pnl_sol),0) FROM paper_fills"
+                " WHERE kind IN ('exit_partial','exit_final') AND ts >= ?",
+                (day_start_ts,)).fetchone()[0]
+            total_realised = self.db.execute(
+                "SELECT COALESCE(SUM(pnl_sol),0) FROM paper_fills"
+                " WHERE kind IN ('exit_partial','exit_final')").fetchone()[0]
+        return {"entries": int(entries), "spent_sol": float(spent),
+                "realised_today_sol": float(realised),
+                "realised_total_sol": float(total_realised)}
 
     def funnel_counts(self, since_ts: float) -> list[tuple[str, int]]:
         with self._lock:

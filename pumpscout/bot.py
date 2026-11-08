@@ -1,9 +1,11 @@
-"""PumpScout Scout process (P1, shadow mode).
+"""PumpScout Scout process (shadow + paper modes).
 
 Wires discovery -> pipeline -> ledger/recorder, runs the fate labeler,
 maintains a regime snapshot from observed stream statistics and writes
-an atomic heartbeat the read-only monitor watches. There is no executor
-in P1: this process cannot sign or send anything.
+an atomic heartbeat the read-only monitor watches. In paper mode the
+executor opens simulated positions from accepted decisions and the
+supervisor closes them by the S10 rules. This process cannot sign or
+send anything: there is no live executor in this build.
 
 Run:  python -m pumpscout.bot --config pumpscout.toml --data-dir /path/runtime
 """
@@ -64,6 +66,15 @@ class Scout:
         self.pipeline = ShadowPipeline(cfg, self.ledger, self.recorder,
                                        self.creators, self.enricher,
                                        self.budget)
+        self.executor = None
+        self.supervisor = None
+        if cfg.mode == "paper":
+            from .executor import Executor
+            from .supervisor import Supervisor
+            self.executor = Executor(cfg, self.ledger, self.enricher.rpc,
+                                     self.budget)
+            self.supervisor = Supervisor(cfg, self.executor, rpc_url,
+                                         self.enricher.rpc, self.budget)
         self.stop = asyncio.Event()
         self.pool = ThreadPoolExecutor(max_workers=4)
         self.launches_last_hour: list[float] = []
@@ -105,17 +116,33 @@ class Scout:
         loop = asyncio.get_running_loop()
         stream = asyncio.create_task(stream_tokens(
             self.cfg.pumpportal_ws, self._on_token, self._on_event, self.stop))
+        sup_task = None
+        if self.supervisor is not None:
+            sup_task = asyncio.create_task(self.supervisor.run())
         last_fate = time.time()
         try:
             while not self.stop.is_set():
                 now = time.time()
                 self._refresh_regime(now)
-                day = DayState()  # shadow: brakes are informational in P1
+                if self.executor is not None:
+                    day = self.executor.day_state(now)
+                else:
+                    day = DayState()  # shadow: brakes are informational
                 try:
                     decisions = await loop.run_in_executor(
                         self.pool, self.pipeline.sweep, now, day,
                         self._regime_ok(now))
                     self.decisions_today += len(decisions)
+                    if self.executor is not None:
+                        for dec in decisions:
+                            if not dec.accepted:
+                                continue
+                            snap = self.ledger.latest_analysis(dec.mint) or {}
+                            snap_price = None
+                            if snap.get("virtual_sol") and snap.get("virtual_token"):
+                                snap_price = snap["virtual_sol"] / snap["virtual_token"]
+                            await loop.run_in_executor(
+                                self.pool, self.executor.enter, dec, snap_price)
                 except Exception as exc:  # a bad sweep must not kill the scout
                     self.ledger.event(now, "sweep_error", None,
                                       {"error": type(exc).__name__})
@@ -127,14 +154,19 @@ class Scout:
                     except Exception as exc:
                         self.ledger.event(now, "fate_error", None,
                                           {"error": type(exc).__name__})
-                write_heartbeat(self.data_dir, {
+                hb = {
                     "ts": now, "version": __version__, "mode": self.cfg.mode,
                     "buffered": len(self.pipeline.buffer),
                     "regime_score": round(self.regime.score, 3),
                     "decisions_total": self.decisions_today,
                     "rpc_budget_remaining": self.budget.remaining("rpc"),
                     "api_budget_remaining": self.budget.remaining("api"),
-                })
+                }
+                if self.executor is not None:
+                    hb.update(self.executor.summary(now))
+                    hb["supervisor_ws_ok"] = bool(
+                        self.supervisor and self.supervisor.ws_healthy)
+                write_heartbeat(self.data_dir, hb)
                 try:
                     await asyncio.wait_for(self.stop.wait(), timeout=5.0)
                 except asyncio.TimeoutError:
@@ -142,6 +174,8 @@ class Scout:
         finally:
             self.stop.set()
             stream.cancel()
+            if sup_task is not None:
+                sup_task.cancel()
             self.recorder.close()
             self.ledger.close()
 
@@ -154,8 +188,9 @@ def main() -> None:
     data_dir = Path(args.data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
     cfg = load_config(args.config, data_dir)
-    if cfg.mode != "shadow":
-        raise SystemExit("P1 build runs shadow mode only")
+    if cfg.mode not in ("shadow", "paper"):
+        raise SystemExit("this build runs shadow or paper mode only; "
+                         "there is no live executor")
     scout = Scout(cfg, data_dir)
     try:
         asyncio.run(scout.run())

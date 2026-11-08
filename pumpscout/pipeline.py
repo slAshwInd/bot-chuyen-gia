@@ -180,7 +180,8 @@ class ShadowPipeline:
         if size < cfg.min_position_sol:
             return self._finish(tok, a, "S8", False, "impact_too_high",
                                 score.total, score.breakdown, "")
-        return self._finish(tok, a, "S8", True, "shadow_would_buy", score.total,
+        reason = "paper_buy" if cfg.mode == "paper" else "shadow_would_buy"
+        return self._finish(tok, a, "S8", True, reason, score.total,
                             score.breakdown, f"size_sol={size:.4f}")
 
     def _finish(self, tok: NewToken, a, stage: str, accepted: bool, reason: str,

@@ -1,6 +1,7 @@
 """Unit tests for PumpScout pure modules + shadow pipeline (P1)."""
 import struct
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -239,3 +240,91 @@ class MetadataUrlTest(unittest.TestCase):
         self.assertIsNone(_metadata_url("https://floatv2.xyz/meta.json"))
         self.assertIsNone(_metadata_url("https://garphe.workers.dev/x"))
         self.assertIsNone(_metadata_url(""))
+
+
+class ExecutorTest(unittest.TestCase):
+    def _curve_bytes(self, v_sol=35.0, v_tok=800_000_000.0, real_sol=5.0):
+        import struct as _s
+        return (b"\x00" * 8 + _s.pack("<QQQQQB",
+                int(v_tok * 1_000_000), int(v_sol * 1_000_000_000),
+                0, int(real_sol * 1_000_000_000), 1_000_000_000_000_000, 0))
+
+    def _executor(self, tmp):
+        from pumpscout.executor import Executor
+        ledger = Ledger(Path(tmp) / "ledger.db")
+
+        class FakeRpc:
+            def __init__(self, data):
+                self.data = data
+
+            def account_data(self, addr):
+                return self.data, "prog"
+
+        return Executor(CFG, ledger, FakeRpc(self._curve_bytes())), ledger
+
+    def test_entry_and_stop_exit(self):
+        from pumpscout.models import Decision
+        with tempfile.TemporaryDirectory() as d:
+            ex, ledger = self._executor(d)
+            dec = Decision("9QxBnBerBX1111111111111111111111111111111", time.time(), "S8", True, "paper_buy",
+                           0.8, (), "size_sol=0.2000")
+            self.assertTrue(ex.enter(dec, snapshot_price=35.0 / 800_000_000.0))
+            pos = ex.positions["9QxBnBerBX1111111111111111111111111111111"]
+            self.assertGreater(pos.tokens_held, 0)
+            self.assertEqual(len(ex.open_mints()), 1)
+            # spot falls to ~0.57x of entry spot, real SOL intact
+            # (a drained pool would correctly fire rug_exit first)
+            ex.on_price("9QxBnBerBX1111111111111111111111111111111", 20.0, 800_000_000.0, 5.0, time.time())
+            self.assertEqual(len(ex.open_mints()), 0)
+            row = ledger.db.execute(
+                "SELECT reason FROM paper_fills WHERE kind='exit_final'"
+            ).fetchone()
+            self.assertEqual(row[0], "stop_loss")
+            state = ex.day_state(time.time())
+            self.assertEqual(state.open_positions, 0)
+            self.assertEqual(state.trades_today, 1)
+            self.assertLess(state.realised_pnl_sol, 0)
+
+    def test_exit_rules(self):
+        from pumpscout.executor import Position, evaluate_exit
+        pos = Position(mint="M", entry_ts=1000.0, entry_price=1.0,
+                       tokens_initial=100.0, tokens_held=100.0,
+                       cost_total_sol=0.2, peak_price=1.0)
+        self.assertEqual(evaluate_exit(pos, 0.69, 5.0, 1010.0, CFG)[2],
+                         "stop_loss")
+        self.assertEqual(evaluate_exit(pos, 2.05, 5.0, 1010.0, CFG),
+                         ("partial", 0.5, "take_profit_1"))
+        pos.tp_done = True
+        pos.peak_price = 2.05
+        self.assertEqual(evaluate_exit(pos, 1.30, 5.0, 1020.0, CFG)[2],
+                         "trailing_stop")
+        pos2 = Position(mint="M", entry_ts=1000.0, entry_price=1.0,
+                        tokens_initial=100.0, tokens_held=100.0,
+                        cost_total_sol=0.2, peak_price=1.1)
+        self.assertEqual(evaluate_exit(pos2, 1.05, 5.0, 1000.0 + 1201, CFG)[2],
+                         "decay_exit")
+        self.assertEqual(evaluate_exit(pos2, 1.05, 5.0, 1000.0 + 3601, CFG)[2],
+                         "decay_exit")  # decay precedes max_hold when stalled
+        pos3 = Position(mint="M", entry_ts=1000.0, entry_price=1.0,
+                        tokens_initial=100.0, tokens_held=100.0,
+                        cost_total_sol=0.2, peak_price=1.5)
+        self.assertEqual(evaluate_exit(pos3, 1.40, 5.0, 1000.0 + 3601, CFG)[2],
+                         "max_hold")
+        pos4 = Position(mint="M", entry_ts=1000.0, entry_price=1.0,
+                        tokens_initial=100.0, tokens_held=100.0,
+                        cost_total_sol=0.2, peak_price=1.0)
+        pos4.samples.append((1000.0, 10.0))
+        self.assertEqual(evaluate_exit(pos4, 1.0, 6.9, 1100.0, CFG)[2],
+                         "rug_exit")
+
+    def test_backtest_simulation(self):
+        from pumpscout.backtest import simulate
+        base = 1_000_000.0
+        path = [{"ts": base, "price": 1.0, "sol": 1.0},
+                {"ts": base + 10, "price": 2.1, "sol": 1.0},
+                {"ts": base + 20, "price": 1.30, "sol": 1.0},
+                {"ts": base + 30, "price": 1.25, "sol": 1.0}]
+        got = simulate(base - 100, 0.2, path, CFG)
+        self.assertTrue(got["closed"])
+        self.assertEqual(got["exit_reason"], "trailing_stop")
+        self.assertGreater(got["pnl_sol"], 0)

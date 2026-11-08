@@ -96,6 +96,9 @@ pumpscout/risk.py
 pumpscout/safety.py
 pumpscout/scoring.py
 pumpscout/surrogate.py
+pumpscout/executor.py
+pumpscout/supervisor.py
+pumpscout/backtest.py
 pumpscout/tg.py
 pumpscout/README.md
 pumpscout/deploy/ensure_running.sh

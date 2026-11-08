@@ -10,6 +10,11 @@ ExecStart=/home/hatch/pumpscout-runtime/venv/bin/python -m pumpscout.bot --confi
 Restart=always
 RestartSec=10
 Environment=PYTHONUNBUFFERED=1
+# The egress proxy terminates TLS with a custom CA. Without these, the
+# service's Python cannot verify certificates and every HTTPS call to
+# credential-swapped hosts (Helius) fails - the bot then runs blind.
+Environment=SSL_CERT_FILE=/run/hatch/egress-tls/ca-bundle.pem
+Environment=REQUESTS_CA_BUNDLE=/run/hatch/egress-tls/ca-bundle.pem
 
 [Install]
 WantedBy=multi-user.target
