@@ -10,8 +10,12 @@ Quota discipline (provider budget ~1M requests / 30 days):
 - Core enrichment is ONE getMultipleAccounts request (mint + curve).
 - The holder read (+2 requests) happens only after the cheap contract
   and liquidity vetoes pass - most tokens never cost it.
+- The enhanced-API trade read (the priciest call, ~100 credits) is
+  paid only for tokens that also survive the holder vetoes.
 - A persisted daily RequestBudget and an hourly analysis pace cap how
-  fast tokens may consume requests at all; both fail closed.
+  fast tokens may consume requests at all; both fail closed. A
+  circuit breaker pauses analysis entirely after a streak of core
+  RPC failures, so an outage or quota wall is not hammered.
 """
 from __future__ import annotations
 
@@ -51,6 +55,8 @@ class ShadowPipeline:
         self.seen = SeenSet(cfg.seen_max)
         self.buffer: dict[str, NewToken] = {}
         self._analysis_times: deque[float] = deque()
+        self._rpc_fail_streak = 0
+        self._breaker_until = 0.0
 
     # ---- S0 intake
     def on_token(self, tok: NewToken) -> None:
@@ -68,6 +74,8 @@ class ShadowPipeline:
     # ---- ripening sweep: analyse everything old enough, within pace
     def sweep(self, now: float, day: DayState, regime_ok: bool) -> list[Decision]:
         out: list[Decision] = []
+        if now < self._breaker_until:
+            return out  # RPC circuit breaker open: burn no calls at all
         while self._analysis_times and now - self._analysis_times[0] > 3600:
             self._analysis_times.popleft()
         for mint, tok in list(self.buffer.items()):
@@ -101,6 +109,16 @@ class ShadowPipeline:
             return self._decide(tok, "S1", False, reason, None, (), "")
 
         a = self.enricher.enrich(tok.mint, tok.creator, tok.uri)
+        if "rpc_mint:fail" in a.health:
+            self._rpc_fail_streak += 1
+            if self._rpc_fail_streak >= cfg.rpc_breaker_threshold:
+                self._rpc_fail_streak = 0
+                self._breaker_until = now + cfg.rpc_breaker_cooldown_seconds
+                self.recorder.record("rpc_breaker_open", now, {
+                    "mint": tok.mint,
+                    "cooldown_seconds": cfg.rpc_breaker_cooldown_seconds})
+        elif "rpc_mint:ok" in a.health:
+            self._rpc_fail_streak = 0
         rugs, launches = self.creators.stats(tok.creator)
         a = dataclasses.replace(a, creator_prior_rugs=rugs,
                                 creator_prior_launches=launches,
@@ -134,6 +152,19 @@ class ShadowPipeline:
             return self._finish(tok, a, "S5", False, flow.veto, None, (), "")
         if flow.reason_code:
             return self._finish(tok, a, "S5", False, flow.reason_code, None, (), "")
+
+        # Late trade-history read: the enhanced API is the priciest
+        # Helius call, so it is paid only now - for tokens that
+        # survived every cheaper veto (the holder vetoes above need
+        # no trades). Fail-closed when the api budget is spent.
+        if not a.trades_read:
+            if not self.budget.allow("api", cfg.trades_api_cost, now):
+                return self._finish(tok, a, "S5", False, "data_unavailable",
+                                    None, (), "api_budget_exhausted")
+            self.budget.spend("api", cfg.trades_api_cost, now)
+            a = self.enricher.enrich_trades(a)
+            flow = evaluate_flow(a, cfg, tok.creator, a.supply_tokens)
+
         soft = flow_rejection(flow, cfg)
         if soft:
             return self._finish(tok, a, "S5", False, soft, None, (), "")

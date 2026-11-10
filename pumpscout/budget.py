@@ -3,8 +3,12 @@
 The Helius free tier allows ~1M credits per 30 days (~33k/day). Two
 buckets are tracked separately because the enhanced-transactions API
 (api.helius.xyz) is a different, scarcer resource than plain RPC:
-  - "rpc": getMultipleAccounts / getTokenLargestAccounts (budget 30k/day)
-  - "api": enhanced transactions fallback for trade history (2k/day)
+  - "rpc": plain JSON-RPC requests (core reads, holders, fate labels;
+    budget 30k/day, ~1 credit each)
+  - "api": enhanced transactions for trade history, denominated in
+    approximate CREDITS (~100 per call; budget 15k units/day). Counting
+    this bucket in requests let it burn the monthly quota in days -
+    the buckets must reflect what the provider actually charges.
 
 The counter is persisted in the runtime data dir and is fail-closed:
 when a bucket is spent, the corresponding read stops and tokens are

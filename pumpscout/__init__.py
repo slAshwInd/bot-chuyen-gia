@@ -15,9 +15,19 @@ vetoes and blind checks stay fail-closed); exits retuned - TP stage 1
 at +50%, trailing 25%, stop-loss unchanged at -30%. All entry
 thresholds unchanged; the paper era from this version is evaluated
 separately at REVIEW_HOLD 30.
+
+0.3.1 (2026-11-10): call-mechanism optimisation after Helius answered
+429 (monthly credit quota burned in ~3 days). The enhanced-API trade
+read moves from enrich() - where it fired for nearly every analysis -
+to a late pipeline phase paid only for tokens that survive S3/S4 and
+the holder vetoes; the api budget now counts approximate credits
+(~100 per enhanced call, 15k/day cap). A circuit breaker pauses
+analysis after 10 consecutive core-RPC failures (10 min cooldown),
+and fate passes are capped (300 labels), budget-charged and abort
+after 5 consecutive unreadable curves. No threshold or rule changed.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 MODE_SHADOW = "shadow"
 MODE_PAPER = "paper"
 MODE_LIVE_TICKET = "live_ticket"

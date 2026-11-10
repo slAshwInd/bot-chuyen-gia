@@ -242,15 +242,12 @@ class Enricher:
         except Exception:
             health.append("trades:fail")
 
-        # --- Fallbacks when the pump.fun frontend API is unreachable
-        # (it 403s from some egress IPs): trade history via the Helius
-        # enhanced-transactions API (separate "api" budget bucket), and
-        # socials from the token's own metadata JSON.
-        if "trades:ok" not in health:
-            got = self._helius_trades(mint)
-            if got is not None:
-                a.update(trades=got, trades_read=True)
-                health.append("trades:helius")
+        # --- Fallback when the pump.fun frontend API is unreachable
+        # (it 403s from some egress IPs): socials from the token's own
+        # metadata JSON. Trade history is NOT fetched here any more:
+        # it lives in the late phase (enrich_trades), because the
+        # enhanced API is the priciest Helius resource and fetching it
+        # for every analysed token burned the monthly quota.
         if a.get("has_socials") is None and uri:
             socials = self._metadata_socials(uri)
             if socials is not None:
@@ -283,17 +280,36 @@ class Enricher:
         a["health"] = tuple(health)
         return Analysis(**a)
 
+    def enrich_trades(self, a: Analysis) -> Analysis:
+        """Late-phase trade-history read (1 enhanced-API call).
+
+        Deliberately separate from enrich(): the enhanced API is the
+        most expensive Helius resource per call, and the pump.fun
+        frontend API - which would make it unnecessary - 403s from
+        this egress, so fetching it for every analysed token (most of
+        them vetoed junk) burned the monthly credit quota in days
+        (2026-11-10 diagnosis). The pipeline calls this only for
+        tokens that survived every cheaper veto and charges the
+        credit-weighted api cost itself."""
+        import dataclasses
+        if a.trades_read:
+            return a
+        got = self._helius_trades(a.mint)
+        if got is None:
+            return a
+        return dataclasses.replace(a, trades=got, trades_read=True,
+                                   health=a.health + ("trades:helius",))
+
     def _helius_trades(self, mint: str) -> tuple[Trade, ...] | None:
         """Recent trades reconstructed from Helius parsed transactions
         on the bonding-curve account. Direction: tokens leaving the
         curve to a user = buy; tokens returning to the curve = sell.
         SOL amount from the user's native balance change (includes the
         small network/priority fees - acceptable for flow heuristics).
-        Costs one "api" budget unit; returns None when unavailable."""
+        Costs one enhanced-API call; the pipeline budgets it at the
+        credit-weighted api cost. Returns None when unavailable."""
         key = self._api_key_query()
         if key is None:
-            return None
-        if self.budget is not None and not self.budget.allow("api", 1):
             return None
         try:
             curve = bonding_curve_address(mint)
@@ -304,8 +320,6 @@ class Enricher:
             txs = r.json()
         except Exception:
             return None
-        if self.budget is not None:
-            self.budget.spend("api", 1)
         out: list[Trade] = []
         for tx in txs:
             changes = {c.get("account"): (c.get("nativeBalanceChange") or 0)

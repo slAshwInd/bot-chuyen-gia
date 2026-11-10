@@ -128,6 +128,14 @@ class ConfigTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 load_config(p, d)
 
+    def test_call_guard_defaults(self):
+        cfg = Config()
+        self.assertEqual(cfg.trades_api_cost, 100)
+        self.assertEqual(cfg.helius_api_daily_budget, 15000)
+        self.assertEqual(cfg.rpc_breaker_threshold, 10)
+        self.assertEqual(cfg.fate_max_labels_per_pass, 300)
+        self.assertEqual(cfg.fate_abort_after_failures, 5)
+
     def test_exit_defaults_retuned_2026_11_10(self):
         cfg = Config()
         self.assertEqual(cfg.stop_loss_pct, 0.30)
@@ -272,9 +280,66 @@ class PotentialTest(unittest.TestCase):
         self.assertAlmostEqual(rep.score, 0.80)
 
 
+class _StubCurveRpc:
+    def __init__(self, ok=True):
+        self.ok = ok
+        self.calls = 0
+
+    def account_data(self, addr):
+        self.calls += 1
+        if not self.ok:
+            return None
+        data = bytearray(8 + 41)
+        struct.pack_into("<QQQQQB", data, 8,
+                         800_000_000 * 1_000_000, 30 * 1_000_000_000,
+                         0, 0, 0, 0)
+        return bytes(data), "prog"
+
+
+class FatePassTest(unittest.TestCase):
+    def _ledger_with_decisions(self, n, ts=1000.0):
+        tmp = tempfile.mkdtemp()
+        ledger = Ledger(Path(tmp) / "ledger.db")
+        for i in range(n):
+            mint = f"FateMint{i + 1}"  # valid base58 (no '0'), curve PDA must derive
+            ledger.add_token(mint, "creator1", "T", "T", "", ts, ts)
+            ledger.add_decision(mint, ts, "S3", False, "safety_veto",
+                                None, (), "")
+        return ledger
+
+    def test_pass_cap(self):
+        from pumpscout.fate import run_fate_pass
+        ledger = self._ledger_with_decisions(5)
+        labelled = run_fate_pass(ledger, _StubCurveRpc(), now=5000.0,
+                                 max_labels=3)
+        self.assertEqual(labelled, 3)
+        ledger.close()
+
+    def test_pass_aborts_on_failures(self):
+        from pumpscout.fate import run_fate_pass
+        ledger = self._ledger_with_decisions(8)
+        rpc = _StubCurveRpc(ok=False)
+        labelled = run_fate_pass(ledger, rpc, now=5000.0,
+                                 abort_after_failures=5)
+        self.assertEqual(labelled, 0)
+        self.assertEqual(rpc.calls, 5)
+        ledger.close()
+
+    def test_pass_budget_stop(self):
+        from pumpscout.fate import run_fate_pass
+        ledger = self._ledger_with_decisions(5)
+        tmp = tempfile.mkdtemp()
+        budget = RequestBudget(Path(tmp) / "b.json", {"rpc": 2, "api": 10})
+        labelled = run_fate_pass(ledger, _StubCurveRpc(), now=5000.0,
+                                 budget=budget)
+        self.assertEqual(labelled, 2)
+        ledger.close()
+
+
 class FakeEnricher:
-    def __init__(self, analysis):
+    def __init__(self, analysis, trades_analysis=None):
         self.analysis = analysis
+        self.trades_analysis = trades_analysis
 
     def enrich(self, mint, creator, uri=""):
         return self.analysis
@@ -282,17 +347,20 @@ class FakeEnricher:
     def enrich_holders(self, a):
         return a
 
+    def enrich_trades(self, a):
+        return self.trades_analysis if self.trades_analysis is not None else a
+
 
 class PipelineTest(unittest.TestCase):
-    def _run(self, analysis, budget_limit=30000):
+    def _run(self, analysis, budget_limit=30000, enricher=None, api_limit=10):
         tmp = tempfile.mkdtemp()
         ledger = Ledger(Path(tmp) / "ledger.db")
         recorder = Recorder(tmp)
         creators = CreatorStore(Path(tmp) / "creators.json")
         budget = RequestBudget(Path(tmp) / "budget.json",
-                               {"rpc": budget_limit, "api": 10})
+                               {"rpc": budget_limit, "api": api_limit})
         pipe = ShadowPipeline(CFG, ledger, recorder, creators,
-                              FakeEnricher(analysis), budget)
+                              enricher or FakeEnricher(analysis), budget)
         tok = NewToken(mint="Mint111", creator="creator1", name="Tok",
                        symbol="TOK", uri="ipfs://x", created_ts=1000.0,
                        seen_ts=1000.0)
@@ -307,6 +375,48 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(len(decisions), 1)
         self.assertTrue(decisions[0].accepted)
         self.assertEqual(decisions[0].reason_code, "shadow_would_buy")
+
+    def test_late_trades_read_enables_buy(self):
+        bare = good_analysis(trades=(), trades_read=False)
+        enr = FakeEnricher(bare, trades_analysis=good_analysis())
+        decisions = self._run(bare, enricher=enr, api_limit=10000)
+        self.assertTrue(decisions[0].accepted)
+
+    def test_late_trades_budget_blocked(self):
+        bare = good_analysis(trades=(), trades_read=False)
+        enr = FakeEnricher(bare, trades_analysis=good_analysis())
+        decisions = self._run(bare, enricher=enr, api_limit=10)
+        self.assertFalse(decisions[0].accepted)
+        self.assertEqual(decisions[0].reason_code, "data_unavailable")
+        self.assertEqual(decisions[0].detail, "api_budget_exhausted")
+
+    def test_rpc_circuit_breaker(self):
+        tmp = tempfile.mkdtemp()
+        ledger = Ledger(Path(tmp) / "ledger.db")
+        recorder = Recorder(tmp)
+        creators = CreatorStore(Path(tmp) / "creators.json")
+        budget = RequestBudget(Path(tmp) / "budget.json",
+                               {"rpc": 30000, "api": 10})
+        failing = good_analysis(health=("rpc_mint:fail", "rpc_curve:fail"),
+                                authorities_read=False)
+        pipe = ShadowPipeline(CFG, ledger, recorder, creators,
+                              FakeEnricher(failing), budget)
+
+        def feed(i):
+            pipe.on_token(NewToken(mint=f"Mint{i}", creator="creator1",
+                                   name="T", symbol="T", uri="ipfs://x",
+                                   created_ts=1000.0, seen_ts=1000.0))
+
+        for i in range(10):
+            feed(i)
+        self.assertEqual(len(pipe.sweep(1200.0, DayState(), True)), 10)
+        feed(99)
+        # Breaker opened on the 10th consecutive failure: no analysis,
+        # no calls, token stays buffered until the cooldown passes.
+        self.assertEqual(pipe.sweep(1201.0, DayState(), True), [])
+        self.assertEqual(len(pipe.sweep(1801.0, DayState(), True)), 1)
+        ledger.close()
+        recorder.close()
 
     def test_would_buy_with_unmeasured_socials(self):
         decisions = self._run(good_analysis(has_socials=None, reply_count=None))

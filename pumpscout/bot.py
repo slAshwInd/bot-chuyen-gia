@@ -150,7 +150,10 @@ class Scout:
                     last_fate = now
                     try:
                         await loop.run_in_executor(
-                            self.pool, run_fate_pass, self.ledger, self.enricher.rpc)
+                            self.pool, run_fate_pass, self.ledger,
+                            self.enricher.rpc, None, self.budget,
+                            self.cfg.fate_max_labels_per_pass,
+                            self.cfg.fate_abort_after_failures)
                     except Exception as exc:
                         self.ledger.event(now, "fate_error", None,
                                           {"error": type(exc).__name__})

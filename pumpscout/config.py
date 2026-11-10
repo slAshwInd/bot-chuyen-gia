@@ -28,8 +28,19 @@ class Config:
     # Provider quota guard: Helius free tier is ~1M requests / 30 days
     # (~33k/day). Budget below that on purpose; see budget.py.
     rpc_daily_budget: int = 30000
-    helius_api_daily_budget: int = 8000
+    # The api bucket is denominated in approximate Helius CREDITS, not
+    # requests: one enhanced-transactions call costs ~100 credits while
+    # a plain RPC call costs ~1. Counting requests let the trades
+    # fallback burn the monthly quota in days (2026-11-10 diagnosis).
+    helius_api_daily_budget: int = 15000
+    trades_api_cost: int = 100         # api units charged per enhanced call
     max_analyses_per_hour: int = 350
+    # Call-mechanism guards (2026-11-10): stop burning provider calls
+    # into a failing endpoint, and bound the fate labeler's pass size.
+    rpc_breaker_threshold: int = 10    # consecutive core-RPC failures
+    rpc_breaker_cooldown_seconds: float = 600.0
+    fate_max_labels_per_pass: int = 300
+    fate_abort_after_failures: int = 5
     # S0/S1 discovery + fast filter
     min_age_seconds: float = 120.0
     max_curve_pct: float = 40.0
