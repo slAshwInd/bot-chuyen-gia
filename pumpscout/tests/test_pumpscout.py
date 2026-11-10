@@ -9,12 +9,13 @@ from pumpscout import curve_math
 from pumpscout.budget import RequestBudget
 from pumpscout.config import Config, load_config
 from pumpscout.creator import CreatorStore
-from pumpscout.enrichment import (b58decode, b58encode, bonding_curve_address,
-                                  parse_mint_account)
+from pumpscout.enrichment import (Enricher, b58decode, b58encode,
+                                  bonding_curve_address, parse_mint_account)
 from pumpscout.flow import evaluate_flow
 from pumpscout.ledger import Ledger
 from pumpscout.models import Analysis, HolderSlice, NewToken, Trade
 from pumpscout.pipeline import ShadowPipeline
+from pumpscout.potential import evaluate_potential
 from pumpscout.recorder import Recorder
 from pumpscout.risk import DayState, can_trade
 from pumpscout.safety import evaluate_safety
@@ -127,6 +128,12 @@ class ConfigTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 load_config(p, d)
 
+    def test_exit_defaults_retuned_2026_11_10(self):
+        cfg = Config()
+        self.assertEqual(cfg.stop_loss_pct, 0.30)
+        self.assertEqual(cfg.take_profit_pct, 0.50)
+        self.assertEqual(cfg.trailing_pct, 0.25)
+
     def test_example_loads(self):
         cfg = load_config(Path(__file__).parent.parent / "config.example.toml",
                           tempfile.mkdtemp())
@@ -155,6 +162,114 @@ class EnrichmentParseTest(unittest.TestCase):
         b = bonding_curve_address("So11111111111111111111111111111111111111112")
         self.assertEqual(a, b)
         self.assertEqual(len(b58decode(a)), 32)
+
+
+class _StubRpc:
+    """Canned largest-accounts + token-account reads for holder tests.
+
+    rows: (account_address, owner_wallet, amount_tokens); owner None
+    simulates an account that vanished between the two reads."""
+
+    def __init__(self, rows):
+        self.rows = rows
+
+    def call(self, method, params):
+        if method != "getTokenLargestAccounts":
+            raise AssertionError(method)
+        return {"value": [{"address": r[0]} for r in self.rows]}
+
+    def multiple_accounts(self, addresses):
+        out = []
+        for _addr, owner, tokens in self.rows:
+            if owner is None:
+                out.append(None)
+                continue
+            data = bytearray(165)
+            data[32:64] = b58decode(owner)
+            struct.pack_into("<Q", data, 64, int(tokens * 1_000_000))
+            out.append((bytes(data),
+                        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"))
+        return out
+
+
+class EnrichHoldersTest(unittest.TestCase):
+    MINT = "9QxBnBerBX1111111111111111111111111111111"
+    SUPPLY = 1_000_000_000.0
+
+    def _enrich(self, rows, supply=SUPPLY):
+        enr = Enricher("https://example.invalid")
+        enr.rpc = _StubRpc(rows)
+        a = Analysis(mint=self.MINT, ts=2000.0, supply_tokens=supply)
+        return enr.enrich_holders(a)
+
+    def test_shares_of_supply_curve_excluded_owners_aggregated(self):
+        curve = bonding_curve_address(self.MINT)
+        whale = b58encode(bytes([8] * 32))
+        agg = b58encode(bytes([7] * 32))
+        creator = b58encode(bytes([9] * 32))
+        a = self._enrich([
+            ("AcctCurve", curve, 600_000_000.0),
+            ("AcctWhale", whale, 100_000_000.0),
+            ("AcctA1", agg, 25_000_000.0),
+            ("AcctA2", agg, 25_000_000.0),
+            ("AcctCreator", creator, 10_000_000.0),
+        ])
+        self.assertTrue(a.holders_read)
+        by_wallet = {h.wallet: h.pct for h in a.top_holders}
+        self.assertNotIn(curve, by_wallet)
+        self.assertAlmostEqual(by_wallet[whale], 0.10)
+        self.assertAlmostEqual(by_wallet[agg], 0.05)
+        self.assertAlmostEqual(by_wallet[creator], 0.01)
+        # Shares of supply: they must NOT sum to 1.0 (the old code
+        # normalised by the top-20 sum, so they always did).
+        self.assertAlmostEqual(sum(by_wallet.values()), 0.16)
+        rep = evaluate_flow(a, CFG, creator, self.SUPPLY)
+        self.assertIsNone(rep.veto)
+        self.assertIsNone(rep.reason_code)
+        self.assertAlmostEqual(rep.top10_pct, 0.16)
+        self.assertAlmostEqual(rep.creator_pct, 0.01)
+
+    def test_creator_veto_with_real_owner(self):
+        creator = b58encode(bytes([9] * 32))
+        other = b58encode(bytes([8] * 32))
+        a = self._enrich([
+            ("AcctCurve", bonding_curve_address(self.MINT), 500_000_000.0),
+            ("AcctCreator", creator, 300_000_000.0),
+            ("AcctOther", other, 10_000_000.0),
+        ])
+        rep = evaluate_flow(a, CFG, creator, self.SUPPLY)
+        self.assertEqual(rep.veto, "safety_veto")
+        self.assertAlmostEqual(rep.creator_pct, 0.30)
+
+    def test_missing_account_is_blind_not_pass(self):
+        a = self._enrich([("AcctGone", None, 10_000_000.0)])
+        self.assertFalse(a.holders_read)
+        rep = evaluate_flow(a, CFG, "creator1", self.SUPPLY)
+        self.assertEqual(rep.veto, "safety_blind")
+
+    def test_unknown_supply_is_blind(self):
+        a = self._enrich([("Acct", b58encode(bytes([8] * 32)), 1.0)],
+                         supply=None)
+        self.assertFalse(a.holders_read)
+
+
+class PotentialTest(unittest.TestCase):
+    def test_unmeasured_socials_score_zero(self):
+        a = good_analysis(has_socials=None, reply_count=None)
+        rep = evaluate_potential(a, 10.0, 0.5)
+        self.assertEqual(rep.social_score, 0.0)
+        self.assertAlmostEqual(rep.score, (0.0 + 0.5 + 0.5) / 3)
+
+    def test_unmeasured_socials_no_flow_data(self):
+        a = good_analysis(has_socials=None, reply_count=None)
+        rep = evaluate_potential(a, None, None)
+        self.assertEqual(rep.score, 0.0)
+
+    def test_measured_socials_unchanged(self):
+        a = good_analysis(has_socials=True, reply_count=10)
+        rep = evaluate_potential(a, None, None)
+        self.assertAlmostEqual(rep.social_score, 0.80)
+        self.assertAlmostEqual(rep.score, 0.80)
 
 
 class FakeEnricher:
@@ -192,6 +307,11 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(len(decisions), 1)
         self.assertTrue(decisions[0].accepted)
         self.assertEqual(decisions[0].reason_code, "shadow_would_buy")
+
+    def test_would_buy_with_unmeasured_socials(self):
+        decisions = self._run(good_analysis(has_socials=None, reply_count=None))
+        self.assertTrue(decisions[0].accepted)
+        self.assertIn("socials_zero_filled", decisions[0].detail)
 
     def test_veto_path(self):
         decisions = self._run(good_analysis(freeze_authority="EvilAuth"))
@@ -292,10 +412,18 @@ class ExecutorTest(unittest.TestCase):
                        cost_total_sol=0.2, peak_price=1.0)
         self.assertEqual(evaluate_exit(pos, 0.69, 5.0, 1010.0, CFG)[2],
                          "stop_loss")
+        # TP stage 1 fires at +50% since the 2026-11-10 retune (was +100%).
+        self.assertIsNone(evaluate_exit(pos, 1.49, 5.0, 1010.0, CFG))
+        self.assertEqual(evaluate_exit(pos, 1.50, 5.0, 1010.0, CFG),
+                         ("partial", 0.5, "take_profit_1"))
         self.assertEqual(evaluate_exit(pos, 2.05, 5.0, 1010.0, CFG),
                          ("partial", 0.5, "take_profit_1"))
         pos.tp_done = True
         pos.peak_price = 2.05
+        # 25% trailing since the retune (was 35%): 1.40 is inside the
+        # old band but outside the new one.
+        self.assertEqual(evaluate_exit(pos, 1.40, 5.0, 1020.0, CFG)[2],
+                         "trailing_stop")
         self.assertEqual(evaluate_exit(pos, 1.30, 5.0, 1020.0, CFG)[2],
                          "trailing_stop")
         pos2 = Position(mint="M", entry_ts=1000.0, entry_price=1.0,

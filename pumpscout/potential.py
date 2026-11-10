@@ -20,8 +20,14 @@ class PotentialReport:
 
 def evaluate_potential(a: Analysis, buyer_growth_per_min: float | None,
                        volume_accel: float | None) -> PotentialReport:
-    if a.has_socials is None:
-        return PotentialReport(None, None)
+    # Social presence is a bonus signal, not a safety input: when it
+    # cannot be measured (pump.fun API unreachable from this egress,
+    # metadata silent), it contributes 0 instead of making the token
+    # unscorable. Zero-fill validated by replay on 2026-11-10 (37
+    # signals / 1.5 days with it, 0 without). Safety vetoes and blind
+    # checks elsewhere stay fail-closed; the Analysis snapshot keeps
+    # has_socials=None so the record stays honest, and the pipeline
+    # notes the zero-fill in the decision detail.
     social = 0.0
     if a.has_socials:
         social += 0.6

@@ -8,7 +8,7 @@ WOULD_BUY - nothing is signed, sent or simulated as an order.
 Quota discipline (provider budget ~1M requests / 30 days):
 - S1 fast filter runs on stream data only: 0 RPC requests.
 - Core enrichment is ONE getMultipleAccounts request (mint + curve).
-- The holder read (+1 request) happens only after the cheap contract
+- The holder read (+2 requests) happens only after the cheap contract
   and liquidity vetoes pass - most tokens never cost it.
 - A persisted daily RequestBudget and an hourly analysis pace cap how
   fast tokens may consume requests at all; both fail closed.
@@ -36,7 +36,7 @@ from .risk import DayState, can_trade
 from .safety import evaluate_safety
 
 CORE_RPC_COST = 1      # getMultipleAccounts(mint, curve)
-HOLDERS_RPC_COST = 1   # getTokenLargestAccounts
+HOLDERS_RPC_COST = 2   # getTokenLargestAccounts + getMultipleAccounts (owners)
 
 
 class ShadowPipeline:
@@ -160,29 +160,35 @@ class ShadowPipeline:
             cfg, risk_score=risk_score, liquidity_health=liq_health,
             wallet_diversity=flow.wallet_diversity,
             potential=pot.score, social=pot.social_score)
+        # Socials could not be measured for this token and were scored 0
+        # (see potential.evaluate_potential); record it on the decision
+        # so the zero-fill is never silent in the ledger.
+        zf = "socials_zero_filled" if a.has_socials is None else ""
         if score.total is None:
             return self._finish(tok, a, "S8", False, "data_unavailable", None, (),
-                                "missing:" + ",".join(score.missing))
+                                "missing:" + ",".join(score.missing)
+                                + (";" + zf if zf else ""))
         if pot.score is not None and pot.score < cfg.min_potential_score:
             return self._finish(tok, a, "S7", False, "low_potential", score.total,
-                                score.breakdown, "")
+                                score.breakdown, zf)
         if score.total < cfg.min_total_score:
             return self._finish(tok, a, "S8", False, "low_score", score.total,
-                                score.breakdown, "")
+                                score.breakdown, zf)
 
         verdict = can_trade(cfg, day, score.total, kill_flag=False,
                             regime_is_open=regime_ok)
         if not verdict.allowed:
             return self._finish(tok, a, "S8", False,
                                 verdict.reason_code or "risk_limit",
-                                score.total, score.breakdown, "")
+                                score.total, score.breakdown, zf)
         size = min(verdict.size_sol, liq.adjusted_size_sol)
         if size < cfg.min_position_sol:
             return self._finish(tok, a, "S8", False, "impact_too_high",
-                                score.total, score.breakdown, "")
+                                score.total, score.breakdown, zf)
         reason = "paper_buy" if cfg.mode == "paper" else "shadow_would_buy"
         return self._finish(tok, a, "S8", True, reason, score.total,
-                            score.breakdown, f"size_sol={size:.4f}")
+                            score.breakdown,
+                            f"size_sol={size:.4f}" + (f";{zf}" if zf else ""))
 
     def _finish(self, tok: NewToken, a, stage: str, accepted: bool, reason: str,
                 score: float | None, breakdown: tuple, detail: str) -> Decision:

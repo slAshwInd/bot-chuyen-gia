@@ -75,9 +75,9 @@ class Config:
     max_open_positions: int = 3
     # exits (T-EXIT) - used from P2 on; defined now so config is complete
     stop_loss_pct: float = 0.30
-    take_profit_pct: float = 1.00
+    take_profit_pct: float = 0.50      # retuned 2026-11-10 (was 1.00)
     take_profit_fraction: float = 0.50
-    trailing_pct: float = 0.35
+    trailing_pct: float = 0.25         # retuned 2026-11-10 (was 0.35)
     max_hold_seconds: float = 3600.0
     decay_exit_seconds: float = 1200.0
     exit_poll_seconds: float = 3.0

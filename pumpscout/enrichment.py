@@ -361,24 +361,55 @@ class Enricher:
         return hunt(meta)
 
     def enrich_holders(self, a: Analysis) -> Analysis:
-        """Late-phase holder read (1 RPC request).
+        """Late-phase holder read (2 RPC requests).
 
         Deliberately separate from enrich(): it is the most fragile and
         most rate-limited call, so the pipeline only pays for it after a
         token has passed the cheap contract/liquidity vetoes.
+
+        Shares are fractions of TOTAL SUPPLY (the HolderSlice contract),
+        resolved to owner wallets: getTokenLargestAccounts returns
+        token-account addresses, so a second read parses each account's
+        owner field (bytes 32:64 of the SPL token-account layout) and
+        its amount (bytes 64:72). The bonding curve's own token account
+        (owner = curve PDA) is excluded - it is the unsold supply, not
+        a holder. Accounts sharing one owner are aggregated, so the
+        creator veto in S5 compares real wallets. Any unreadable piece
+        fails the whole read (blind is not pass).
         """
         import dataclasses
         try:
+            supply = a.supply_tokens
+            if supply is None or supply <= 0:
+                raise RuntimeError("supply unknown")
             res = self.rpc.call("getTokenLargestAccounts", [a.mint])
             vals = res["value"]
-            total = sum(v["uiAmount"] or 0 for v in vals)
-            if total <= 0:
+            if not vals:
                 raise RuntimeError("empty largest accounts")
+            addresses = [v["address"] for v in vals]
+            accounts = self.rpc.multiple_accounts(addresses)
+            if len(accounts) != len(addresses):
+                raise RuntimeError("holder account read mismatch")
+            curve_owner = bonding_curve_address(a.mint)
+            by_owner: dict[str, float] = {}
+            for item in accounts:
+                if item is None:
+                    raise RuntimeError("holder account missing")
+                data, _program = item
+                if len(data) < 72:
+                    raise RuntimeError("token account too short")
+                owner = b58encode(data[32:64])
+                if owner == curve_owner:
+                    continue
+                amount = struct.unpack_from("<Q", data, 64)[0] / TOKEN_DECIMALS
+                by_owner[owner] = by_owner.get(owner, 0.0) + amount
+            holders = tuple(
+                HolderSlice(wallet, amount / supply)
+                for wallet, amount in sorted(
+                    by_owner.items(), key=lambda kv: kv[1], reverse=True))
             return dataclasses.replace(
                 a,
-                top_holders=tuple(
-                    HolderSlice(v["address"], (v["uiAmount"] or 0) / total)
-                    for v in vals),
+                top_holders=holders,
                 holders_read=True,
                 health=a.health + ("rpc_holders:ok",))
         except Exception:
