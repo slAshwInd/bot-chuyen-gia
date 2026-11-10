@@ -35,6 +35,10 @@ CREATE TABLE IF NOT EXISTS fate_labels(
   horizon TEXT NOT NULL, ts REAL NOT NULL, label TEXT NOT NULL,
   price_change REAL, detail TEXT,
   UNIQUE(mint, horizon));
+CREATE TABLE IF NOT EXISTS fate_failures(
+  mint TEXT NOT NULL, horizon TEXT NOT NULL,
+  fails INTEGER NOT NULL, last_ts REAL NOT NULL,
+  PRIMARY KEY(mint, horizon));
 CREATE TABLE IF NOT EXISTS daily_stats(
   day TEXT NOT NULL, key TEXT NOT NULL, value REAL NOT NULL,
   PRIMARY KEY(day, key));
@@ -106,16 +110,61 @@ class Ledger:
                 " VALUES(?,?,?,?,?,?)", (mint, horizon, ts, label, price_change, detail))
             self.db.commit()
 
-    def tokens_needing_fate(self, horizon_seconds: float, now: float) -> list[str]:
-        """Decided tokens old enough for this horizon and not yet labelled."""
+    def tokens_needing_fate(self, horizon_seconds: float, now: float,
+                            defer_after: int = 3) -> list[str]:
+        """Decided tokens old enough for this horizon and not yet labelled.
+
+        Ordered oldest-decision first. Tokens whose curve read has failed
+        in >= defer_after consecutive passes are deferred: they sort
+        behind every non-deferred token (low-priority queue), so a pass
+        capped per horizon reaches them only with leftover capacity
+        instead of burning its whole budget retrying them first.
+        """
         horizon = f"{int(horizon_seconds // 3600)}h"
         with self._lock:
             rows = self.db.execute(
-                "SELECT DISTINCT d.mint FROM decisions d"
+                "SELECT d.mint, MIN(d.ts) AS first_ts,"
+                " COALESCE(f.fails, 0) AS fails"
+                " FROM decisions d"
+                " LEFT JOIN fate_failures f"
+                "   ON f.mint = d.mint AND f.horizon = ?"
                 " WHERE d.ts + ? <= ? AND d.mint NOT IN"
-                " (SELECT mint FROM fate_labels WHERE horizon = ?)",
-                (horizon_seconds, now, horizon)).fetchall()
+                " (SELECT mint FROM fate_labels WHERE horizon = ?)"
+                " GROUP BY d.mint"
+                " ORDER BY (fails >= ?) ASC, first_ts ASC",
+                (horizon, horizon_seconds, now, horizon,
+                 defer_after)).fetchall()
         return [r[0] for r in rows]
+
+    def record_fate_failure(self, mint: str, horizon: str, ts: float) -> int:
+        """Increment the consecutive-failure counter for one mint/horizon
+        and return the new count."""
+        with self._lock:
+            self.db.execute(
+                "INSERT INTO fate_failures(mint,horizon,fails,last_ts)"
+                " VALUES(?,?,1,?)"
+                " ON CONFLICT(mint,horizon) DO UPDATE SET"
+                " fails = fails + 1, last_ts = excluded.last_ts",
+                (mint, horizon, ts))
+            self.db.commit()
+            row = self.db.execute(
+                "SELECT fails FROM fate_failures WHERE mint = ? AND horizon = ?",
+                (mint, horizon)).fetchone()
+        return int(row[0]) if row else 0
+
+    def clear_fate_failure(self, mint: str, horizon: str) -> None:
+        with self._lock:
+            self.db.execute(
+                "DELETE FROM fate_failures WHERE mint = ? AND horizon = ?",
+                (mint, horizon))
+            self.db.commit()
+
+    def fate_failure_count(self, mint: str, horizon: str) -> int:
+        with self._lock:
+            row = self.db.execute(
+                "SELECT fails FROM fate_failures WHERE mint = ? AND horizon = ?",
+                (mint, horizon)).fetchone()
+        return int(row[0]) if row else 0
 
     def latest_analysis(self, mint: str) -> dict | None:
         with self._lock:

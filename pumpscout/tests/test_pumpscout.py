@@ -133,8 +133,9 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(cfg.trades_api_cost, 100)
         self.assertEqual(cfg.helius_api_daily_budget, 15000)
         self.assertEqual(cfg.rpc_breaker_threshold, 10)
-        self.assertEqual(cfg.fate_max_labels_per_pass, 300)
+        self.assertEqual(cfg.fate_max_labels_per_horizon, 150)
         self.assertEqual(cfg.fate_abort_after_failures, 5)
+        self.assertEqual(cfg.fate_defer_after_failures, 3)
 
     def test_exit_defaults_retuned_2026_11_10(self):
         cfg = Config()
@@ -311,8 +312,74 @@ class FatePassTest(unittest.TestCase):
         from pumpscout.fate import run_fate_pass
         ledger = self._ledger_with_decisions(5)
         labelled = run_fate_pass(ledger, _StubCurveRpc(), now=5000.0,
-                                 max_labels=3)
+                                 per_horizon_cap=3)
         self.assertEqual(labelled, 3)
+        ledger.close()
+
+    def test_per_horizon_cap_reaches_later_horizons(self):
+        # The starvation bug: with one shared cap the 1h backlog ate the
+        # whole pass and 6h/24h never got a turn. Decisions old enough
+        # for all three horizons, cap 2 per horizon -> 2 labels each.
+        from pumpscout.fate import run_fate_pass
+        ledger = self._ledger_with_decisions(4)
+        labelled = run_fate_pass(ledger, _StubCurveRpc(), now=100000.0,
+                                 per_horizon_cap=2)
+        self.assertEqual(labelled, 6)
+        counts = dict(ledger.db.execute(
+            "SELECT horizon, COUNT(*) FROM fate_labels"
+            " GROUP BY horizon").fetchall())
+        self.assertEqual(counts, {"1h": 2, "6h": 2, "24h": 2})
+        ledger.close()
+
+    def test_queue_is_oldest_first(self):
+        tmp = tempfile.mkdtemp()
+        ledger = Ledger(Path(tmp) / "ledger.db")
+        for i, ts in enumerate((3000.0, 1000.0, 2000.0)):
+            mint = f"OrderMint{i + 1}"
+            ledger.add_token(mint, "creator1", "T", "T", "", ts, ts)
+            ledger.add_decision(mint, ts, "S3", False, "safety_veto",
+                                None, (), "")
+        queue = ledger.tokens_needing_fate(3600.0, 10000.0)
+        self.assertEqual(queue, ["OrderMint2", "OrderMint3", "OrderMint1"])
+        ledger.close()
+
+    def test_deferred_after_three_failures(self):
+        from unittest import mock
+        import pumpscout.fate as fate_mod
+        tmp = tempfile.mkdtemp()
+        ledger = Ledger(Path(tmp) / "ledger.db")
+        for mint, ts in (("BadMint1", 1000.0), ("GoodMint1", 1200.0)):
+            ledger.add_token(mint, "creator1", "T", "T", "", ts, ts)
+            ledger.add_decision(mint, ts, "S3", False, "safety_veto",
+                                None, (), "")
+
+        def fake_label(mint, led, rpc):
+            if mint.startswith("Bad"):
+                return None
+            return "alive", 0.0, ""
+
+        with mock.patch.object(fate_mod, "label_for", fake_label):
+            for _ in range(3):
+                labelled = fate_mod.run_fate_pass(
+                    ledger, _StubCurveRpc(), now=5000.0,
+                    abort_after_failures=99)
+            # Good mint labelled on pass 1; bad mint failed 3 passes.
+            self.assertEqual(labelled, 0)
+            self.assertEqual(ledger.fate_failure_count("BadMint1", "1h"), 3)
+            # Deferred: a newer never-failed mint now sorts ahead of the
+            # older bad mint despite its earlier decision ts.
+            ledger.add_token("FreshMint1", "creator1", "T", "T", "",
+                             3000.0, 3000.0)
+            ledger.add_decision("FreshMint1", 3000.0, "S3", False,
+                                "safety_veto", None, (), "")
+            queue = ledger.tokens_needing_fate(3600.0, 9000.0)
+            self.assertEqual(queue, ["FreshMint1", "BadMint1"])
+            # A successful read clears the failure mark.
+            with mock.patch.object(
+                    fate_mod, "label_for",
+                    lambda m, led, rpc: ("alive", 0.0, "")):
+                fate_mod.run_fate_pass(ledger, _StubCurveRpc(), now=9500.0)
+            self.assertEqual(ledger.fate_failure_count("BadMint1", "1h"), 0)
         ledger.close()
 
     def test_pass_aborts_on_failures(self):

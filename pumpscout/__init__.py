@@ -25,9 +25,19 @@ the holder vetoes; the api budget now counts approximate credits
 analysis after 10 consecutive core-RPC failures (10 min cooldown),
 and fate passes are capped (300 labels), budget-charged and abort
 after 5 consecutive unreadable curves. No threshold or rule changed.
+
+0.3.2 (2026-11-11, user-approved option A): fate labeler scheduling.
+The 0.3.1 pass shared one global cap in 1h -> 6h -> 24h order, so a
+swollen 1h backlog starved the 6h/24h horizons indefinitely (6h
+labels stalled ~22h, 24h never started). Each horizon now has its
+own 150-label cap per pass, queues are ordered oldest-decision
+first, and a mint whose curve read fails in 3 consecutive passes is
+marked in fate_failures and drops to the low-priority tail of its
+queue instead of being retried first forever; a successful read
+clears the mark. Labelling only - no threshold or rule changed.
 """
 
-__version__ = "0.3.1"
+__version__ = "0.3.2"
 MODE_SHADOW = "shadow"
 MODE_PAPER = "paper"
 MODE_LIVE_TICKET = "live_ticket"

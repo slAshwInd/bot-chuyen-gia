@@ -39,8 +39,9 @@ class Config:
     # into a failing endpoint, and bound the fate labeler's pass size.
     rpc_breaker_threshold: int = 10    # consecutive core-RPC failures
     rpc_breaker_cooldown_seconds: float = 600.0
-    fate_max_labels_per_pass: int = 300
+    fate_max_labels_per_horizon: int = 150
     fate_abort_after_failures: int = 5
+    fate_defer_after_failures: int = 3
     # S0/S1 discovery + fast filter
     min_age_seconds: float = 120.0
     max_curve_pct: float = 40.0
